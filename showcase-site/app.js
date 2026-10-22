@@ -212,7 +212,16 @@ const COPY = {
       'The demo position changed, so its source song was stopped. Press Restart together; seeking is not continuously synchronized.',
     sourcePlayer: 'Source video · Bilibili official player',
     sourceRequest:
-      'Start requested. If sound is blocked, press Play in Bilibili. Restart together resets both requests, but does not guarantee ongoing sync.',
+      'Bilibili’s page loaded; the demo is starting. Music may still buffer or require Play in Bilibili. Restarting does not guarantee ongoing sync.',
+    sourceLoading: 'Waiting for Bilibili’s player page. The demo stays at the start while it loads.',
+    sourceTimeout:
+      'Bilibili has not finished loading. If you can hear the song, start the demo below, or restart to retry.',
+    sourceError:
+      'Bilibili’s player page could not load. Retry, or open the source song. The demo has not started.',
+    startDemoNow: 'Song audible? Start demo now',
+    sourceManual:
+      'Demo started at your request. This page cannot read Bilibili’s playback position; ongoing sync is not guaranteed.',
+    sourceWaitLabel: 'Waiting for Bilibili…',
     songWatchNote:
       'Hear the corresponding song in a visible Bilibili player. This contacts Bilibili; its playback and privacy rules apply. The downloaded app recording stays silent.',
     originalWatchNote:
@@ -269,7 +278,13 @@ const COPY = {
     pairSeek: '演示进度已改变，原曲已停止。请按「重新同步」；拖动进度不会持续同步原曲。',
     sourcePlayer: '来源视频 · Bilibili 官方播放器',
     sourceRequest:
-      '已请求开始。若声音被拦截，请点击 Bilibili 内的播放按钮。「重新同步」只重启共同起点的请求，不保证两个播放器持续同步。',
+      'Bilibili 页面已加载，正在启动演示；音乐仍可能缓冲或需在 Bilibili 内点击播放。重新启动不保证持续同步。',
+    sourceLoading: '正在等待 Bilibili 播放器页面，演示会先停在开头。',
+    sourceTimeout: 'Bilibili 尚未完成加载。如果已听到原曲，可在下方开始演示，或重新同步重试。',
+    sourceError: 'Bilibili 播放器页面未能加载。可重试或打开原曲链接，演示尚未开始。',
+    startDemoNow: '音乐已响，开始演示',
+    sourceManual: '已按你的操作开始演示。网页无法读取 Bilibili 进度，不能保证持续同步。',
+    sourceWaitLabel: '正在等待 Bilibili…',
     songWatchNote:
       '通过可见的 Bilibili 官方播放器听对应歌曲；这会连接 Bilibili，适用其播放与隐私规则。下载的程序录屏仍无声。',
     originalWatchNote:
@@ -346,6 +361,9 @@ export function bootGallery(document) {
     playbackError = false,
     originalSoundIntent = true,
     sourceIframe = null,
+    sourceAttempt = null,
+    sourceStartPhase = 'idle',
+    queuedInternalPauses = 0,
     pairNeedsRestart = false,
     expectedPairReset = null,
     lastAppliedMuted = player.muted,
@@ -359,6 +377,17 @@ export function bootGallery(document) {
     player.muted = lastAppliedMuted;
   };
   const reducedMotion = () => Boolean(view.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  // pause events are queued: a reset's old event must not cancel its new load gate.
+  const pauseLocal = () => {
+    if (!player.paused) queuedInternalPauses += 1;
+    player.pause();
+  };
+  const loadLocal = () => {
+    // The media load algorithm removes queued media events, including our pause.
+    queuedInternalPauses = 0;
+    expectedPairReset = null;
+    player.load();
+  };
   const syncURL = () => {
     try {
       view.history.replaceState(null, '', selectionURL(view.location.href, current.id, language));
@@ -370,7 +399,11 @@ export function bootGallery(document) {
 
   function playbackState() {
     byId('play-cover').hidden = !player.paused && !player.ended && !playbackError;
-    byId('play-label').textContent = t(playbackError ? 'retry' : player.ended ? 'replay' : 'play');
+    const waiting = sourceStartPhase === 'loading';
+    byId('play-button').disabled = waiting;
+    byId('play-label').textContent = t(
+      waiting ? 'sourceWaitLabel' : playbackError ? 'retry' : player.ended ? 'replay' : 'play',
+    );
     byId('audio-description').textContent = t(
       current.kind === 'song' ? 'silent' : player.muted ? 'muted' : 'audible',
     );
@@ -382,10 +415,19 @@ export function bootGallery(document) {
       sourceIframe || pairNeedsRestart ? 'restartTogether' : 'playTogether',
     );
     byId('play-with-sound-button').hidden = current.kind !== 'original';
+    byId('start-demo-now-button').hidden = !sourceIframe || !['loading', 'error'].includes(sourceStartPhase);
     byId('watch-note').textContent = t(current.kind === 'song' ? 'songWatchNote' : 'originalWatchNote');
   }
 
   function stopSource({ focus = false, restart = false } = {}) {
+    if (sourceAttempt) {
+      sourceAttempt.cancelled = true;
+      clearSourceWait(sourceAttempt);
+      if (sourceStartPhase === 'starting') pauseLocal();
+    }
+    if (sourceIframe || sourceAttempt) generation += 1;
+    sourceAttempt = null;
+    sourceStartPhase = 'idle';
     if (sourceIframe) {
       sourceIframe.src = 'about:blank';
       sourceIframe.remove();
@@ -399,6 +441,33 @@ export function bootGallery(document) {
     if (focus && current.kind === 'song') byId('play-together-button').focus({ preventScroll: true });
   }
 
+  function clearSourceWait(attempt) {
+    view.clearTimeout(attempt.timeout);
+    attempt.iframe.removeEventListener('load', attempt.onLoad);
+    attempt.iframe.removeEventListener('error', attempt.onError);
+  }
+
+  function isCurrentSource(attempt) {
+    return (
+      attempt === sourceAttempt &&
+      !attempt.cancelled &&
+      attempt.generation === generation &&
+      attempt.iframe === sourceIframe &&
+      current.kind === 'song'
+    );
+  }
+
+  function startSourceDemo({ manual = false } = {}) {
+    const attempt = sourceAttempt;
+    if (!attempt || !isCurrentSource(attempt) || !['loading', 'error'].includes(sourceStartPhase)) return;
+    clearSourceWait(attempt);
+    sourceStartPhase = 'starting';
+    byId('source-player-note').textContent = t(manual ? 'sourceManual' : 'sourceRequest');
+    message();
+    playbackState();
+    void play({ user: manual || attempt.user });
+  }
+
   function playTogether({ user = true } = {}) {
     if (current.kind !== 'song') return;
     stopSource();
@@ -408,13 +477,12 @@ export function bootGallery(document) {
       return;
     }
     generation += 1;
-    player.pause();
+    pauseLocal();
     if (player.currentTime !== 0) {
       expectedPairReset = { generation, target: 0 };
       player.currentTime = 0;
     }
     setPlayerMuted(true);
-    void play({ user });
     const iframe = document.createElement('iframe');
     iframe.src = officialPlayerURL(current.id);
     iframe.title = `${t('sourcePlayer')}: ${current.title[language]}`;
@@ -422,10 +490,29 @@ export function bootGallery(document) {
     iframe.allowFullscreen = true;
     iframe.referrerPolicy = 'strict-origin-when-cross-origin';
     sourceIframe = iframe;
+    sourceStartPhase = 'loading';
+    const attempt = { iframe, generation, user, cancelled: false, timeout: null };
+    sourceAttempt = attempt;
+    attempt.onLoad = () => {
+      if (isCurrentSource(attempt) && sourceStartPhase === 'loading') startSourceDemo();
+    };
+    const waitFailed = (key) => {
+      if (!isCurrentSource(attempt) || sourceStartPhase !== 'loading') return;
+      clearSourceWait(attempt);
+      sourceStartPhase = 'error';
+      byId('source-player-note').textContent = t(key);
+      message(key);
+      playbackState();
+    };
+    attempt.onError = () => waitFailed('sourceError');
+    iframe.addEventListener('load', attempt.onLoad);
+    iframe.addEventListener('error', attempt.onError);
+    attempt.timeout = view.setTimeout(() => waitFailed('sourceTimeout'), 15_000);
     byId('source-player-section').hidden = false;
     byId('source-player-slot').append(iframe);
-    byId('source-player-note').textContent = t('sourceRequest');
-    byId('play-together-button').textContent = t('restartTogether');
+    byId('source-player-note').textContent = t('sourceLoading');
+    message('sourceLoading');
+    playbackState();
   }
 
   function playlist() {
@@ -530,10 +617,12 @@ export function bootGallery(document) {
       return;
     }
     playbackError = false;
-    if (player.error) player.load();
+    if (player.error) loadLocal();
     try {
       await player.play();
       if (request !== generation) return;
+      if (sourceAttempt && isCurrentSource(sourceAttempt) && sourceStartPhase === 'starting')
+        sourceStartPhase = 'playing';
       if (!player.muted) autoplaySoundBlocked = false;
       message(pairNeedsRestart ? 'pairRestart' : autoplaySoundBlocked ? 'soundBlocked' : '');
       playbackState();
@@ -580,13 +669,14 @@ export function bootGallery(document) {
       return;
     }
     generation += 1;
-    player.pause();
+    pauseLocal();
     current = clip;
     playbackError = false;
     autoplaySoundBlocked = false;
     setPlayerMuted(!(clip.kind === 'original' && originalSoundIntent));
     player.src = `./media/${clip.file}`;
-    player.load();
+    player.preload = clip.kind === 'song' ? 'auto' : 'metadata';
+    loadLocal();
     message();
     playlist();
     details();
@@ -596,6 +686,10 @@ export function bootGallery(document) {
   }
 
   byId('play-button').addEventListener('click', () => {
+    if (sourceAttempt && ['loading', 'error'].includes(sourceStartPhase)) {
+      startSourceDemo({ manual: true });
+      return;
+    }
     if (player.ended) player.currentTime = 0;
     void play({ user: true });
   });
@@ -607,9 +701,11 @@ export function bootGallery(document) {
     playbackState();
   });
   byId('play-together-button').addEventListener('click', playTogether);
+  byId('start-demo-now-button').addEventListener('click', () => startSourceDemo({ manual: true }));
   byId('stop-source-button').addEventListener('click', () => {
     stopSource({ focus: true, restart: true });
     message('pairRestart');
+    playbackState();
   });
   byId('play-with-sound-button').addEventListener('click', () => {
     if (current.kind !== 'original') return;
@@ -624,16 +720,28 @@ export function bootGallery(document) {
     button.addEventListener('click', () => {
       stopSource();
       generation += 1;
-      player.pause();
+      pauseLocal();
       language = button.dataset.language;
       message();
       localize();
     });
-  player.addEventListener('play', playbackState);
+  player.addEventListener('play', () => {
+    if (sourceAttempt && isCurrentSource(sourceAttempt) && !player.paused) {
+      // `play` can precede buffering/Promise resolution. Keep cancellation active.
+      const manuallyStarted = ['loading', 'error'].includes(sourceStartPhase);
+      clearSourceWait(sourceAttempt);
+      sourceStartPhase = 'starting';
+      if (manuallyStarted) byId('source-player-note').textContent = t('sourceManual');
+      if (byId('player-message').textContent === t('sourceLoading')) message();
+    }
+    playbackState();
+  });
   player.addEventListener('pause', () => {
     // pause() during Restart queues an event which may arrive after play().
     // Read the actual current local state rather than stopping a new iframe.
-    if (player.paused && sourceIframe) {
+    if (queuedInternalPauses > 0) {
+      queuedInternalPauses -= 1;
+    } else if (player.paused && sourceIframe) {
       stopSource({ restart: true });
       message('pairRestart');
     }
@@ -671,6 +779,7 @@ export function bootGallery(document) {
     playbackState();
   });
   player.addEventListener('error', () => {
+    stopSource({ restart: current.kind === 'song' });
     playbackError = true;
     message('error');
     playbackState();
@@ -686,7 +795,7 @@ export function bootGallery(document) {
   view.addEventListener('popstate', () => {
     stopSource();
     generation += 1;
-    player.pause();
+    pauseLocal();
     const next = resolveSelection(view.location.href, language);
     const changed = next.clip.id !== current.id;
     language = next.language;
@@ -695,8 +804,9 @@ export function bootGallery(document) {
   });
   const stopAll = () => {
     generation += 1;
-    player.pause();
+    pauseLocal();
     stopSource();
+    playbackState();
   };
   view.addEventListener('pagehide', stopAll);
   view.addEventListener('beforeunload', stopAll);
@@ -711,6 +821,7 @@ export function bootGallery(document) {
       kind: current.kind,
       originalSoundIntent,
       sourcePlayerRequested: Boolean(sourceIframe),
+      sourceStartPhase,
       pairNeedsRestart,
       autoplaySoundBlocked,
     }),

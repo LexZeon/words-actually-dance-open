@@ -20,7 +20,7 @@ Turn a paragraph of notes into words that unfold with music. Keywords move with 
 
 **Choose a song below to watch its matching app preview on the independent showcase site, or download the video directly to your device.** Each preview comes from the app recording driven by that particular track. The public MP4s and GIFs contain only our own app interface and original example text, **with the song audio removed**. Listen through the source links. These are visual demonstrations, not beat-accuracy benchmarks.
 
-🎧 Opening a song preview attempts to start its app recording and the corresponding **Bilibili official player** at the selected excerpt. Original-music demos also request sound by default. If your browser blocks sound, use the prominent play button. **Restart together** returns both requests to their starting points; independent buffering prevents a guarantee of continuous synchronisation. Bilibili serves the song; no song audio is uploaded to this repository or the showcase server. Downloaded app previews remain silent.
+🎧 Opening a song preview requests the corresponding **Bilibili official player** at the selected excerpt, then waits for its page to load before starting the app recording. **Restart together** uses the same sequence; **Song audible? Start demo now** offers manual startup while waiting. Page loading is not an audio-ready signal: separate buffering prevents a guarantee of continuous synchronisation. Original-music demos still request sound by default; use the prominent play control if the browser blocks it. Bilibili serves the song; no song audio is uploaded to this repository or the showcase server. Downloaded app previews remain silent.
 
 📩 **Copyright concerns:** [aivnailedeng@gmail.com](mailto:aivnailedeng@gmail.com) / [lexzeonstudio@gmail.com](mailto:lexzeonstudio@gmail.com). Credits and contact details do not replace permission.
 
@@ -114,7 +114,7 @@ Issues and contributions are welcome. There is no promised update schedule. Repr
 
 **选择下方歌曲，可在独立展示站观看对应程序预览，也能直接下载视频到本机。** 每个预览都来自这首歌驱动程序时的实际录屏。公开 MP4 与动图只包含自有软件界面及原创示例文案，**已去除原曲声音**；请通过原链接听歌。这些是视觉演示，不是拍点准确率测试。
 
-🎧 打开歌曲演示后，默认尝试同时启动程序录屏和 **Bilibili 官方播放器**中的对应片段；原创配乐演示也默认尝试开声。浏览器若拦截声音，可用醒目的播放按钮。「**重新同步**」会把两个播放请求重置到共同起点，但分别缓冲使持续精准同步无法保证。歌曲由 Bilibili 提供，原曲音频不上传到此仓库或展示站服务器；下载的程序预览仍不含原曲声音。
+🎧 打开歌曲演示后，先请求 **Bilibili 官方播放器**中的对应片段，等其页面加载后再开始程序录屏；「**重新同步**」也采用此顺序，等待时可按「**音乐已响，开始演示**」手动启动。页面加载不等于音频就绪，分别缓冲使持续精准同步无法保证。原创配乐演示继续默认尝试开声，浏览器拦截时可用醒目的播放控件。歌曲由 Bilibili 提供，原曲音频不上传到此仓库或展示站服务器；下载的程序预览仍不含原曲声音。
 
 📩 **版权问题请联系：**[aivnailedeng@gmail.com](mailto:aivnailedeng@gmail.com) / [lexzeonstudio@gmail.com](mailto:lexzeonstudio@gmail.com)。署名和联系方式不能代替授权。
 
