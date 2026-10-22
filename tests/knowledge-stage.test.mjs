@@ -112,6 +112,16 @@ function advanceWithFrames(stage, from, to) {
     }
 }
 
+function enterNextAutomaticLine(stage, { frames = false } = {}) {
+  const boundary = stage.getState().sentenceTiming?.transitionBeat;
+  assert.ok(Number.isSafeInteger(boundary), 'The complete sentence must own a quantized boundary');
+  const from = Math.floor(stage.lastTick / 4) + 1;
+  if (frames) advanceWithFrames(stage, from, boundary);
+  else advance(stage, from, boundary);
+  tick(stage, boundary);
+  return boundary;
+}
+
 function worldPose(node) {
   const { id, width, height, fontPx, centerX, centerY, angleDeg } = node;
   return { id, width, height, fontPx, centerX, centerY, angleDeg };
@@ -278,8 +288,7 @@ test('automatic flow hands its original history nodes back to a legacy effect be
   const originalGlyphs = stage.current.chars.map(({ el }) => el);
   const literalText = stage.current.track.textContent;
   const plane = stage.textFlow.plane;
-  const nextBeat = Math.floor(stage.lastTick / 4) + 1;
-  tick(stage, nextBeat);
+  const nextBeat = enterNextAutomaticLine(stage, { frames: true });
   stage.frame({ beatIndex: nextBeat, phase: 0 });
   assert.equal(stage.autoDirection, true);
   assert.ok(!['waterfall-flow', 'quarter-turn'].includes(stage.effect));
@@ -361,7 +370,7 @@ test('waterfall flow moves one shared camera while sentences retain their world 
   const originalGlyphs = stage.current.chars.map(({ el }) => el);
   const originalWorld = worldPose(stage.getState().textFlow.nodes[0]);
   const plane = stage.textFlow.plane;
-  tick(stage, 2);
+  const transitionBeat = enterNextAutomaticLine(stage);
   assert.equal(stage.cursor, 0, 'The camera handoff must finish before the next line types');
   assert.equal(stage.history[0], previous);
   assert.equal(previous.children[0].textContent, '先读这一句。');
@@ -377,7 +386,7 @@ test('waterfall flow moves one shared camera while sentences retain their world 
   );
   const oldLocalTransform = previous.style.transform;
   const cameraAtStart = plane.style.transform;
-  stage.frame({ beatIndex: 2, phase: 0.5 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.5 });
   assert.equal(
     previous.style.transform,
     oldLocalTransform,
@@ -385,9 +394,9 @@ test('waterfall flow moves one shared camera while sentences retain their world 
   );
   assert.notEqual(plane.style.transform, cameraAtStart);
   assert.deepEqual(stage.getState().textFlow.nodes.map(worldPose), worlds);
-  tick(stage, 2, 3);
+  tick(stage, transitionBeat, 3);
   assert.equal(stage.cursor, 0);
-  stage.frame({ beatIndex: 2, phase: 0.9 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.9 });
   const settled = stage.getState().textFlow;
   assert.equal(settled.active, false);
   assert.equal(settled.sharedPlane, true);
@@ -399,7 +408,7 @@ test('waterfall flow moves one shared camera while sentences retain their world 
     Math.abs(screenAngle - Math.round(screenAngle / 360) * 360) < 1e-6,
     'The arriving sentence must settle horizontally',
   );
-  tick(stage, 3);
+  tick(stage, transitionBeat + 1);
   assert.equal(stage.cursor, 1);
   assert.equal(stage.current.track.textContent, '新句沿着旧句继续。');
 });
@@ -416,8 +425,8 @@ test('waterfall flow pause and resize preserve the musical transition phase and 
     ],
   });
   advanceWithFrames(stage, 0, 1);
-  tick(stage, 1);
-  stage.frame({ beatIndex: 1, phase: 0.4 });
+  const transitionBeat = enterNextAutomaticLine(stage);
+  stage.frame({ beatIndex: transitionBeat, phase: 0.4 });
   stage.setPaused(true);
   const before = stage.getState().textFlow;
   const world = before.nodes.map(worldPose);
@@ -440,11 +449,11 @@ test('waterfall flow pause and resize preserve the musical transition phase and 
   stage.frame({ beatIndex: 80, phase: 0.5 });
   assert.equal(plane.style.transform, resizedCamera);
   stage.setPaused(false);
-  stage.frame({ beatIndex: 1, phase: 0.6 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.6 });
   assert.ok(stage.getState().textFlow.progress > progress);
-  stage.frame({ beatIndex: 1, phase: 0.9 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.9 });
   assert.equal(stage.getState().textFlow.active, false);
-  tick(stage, 2);
+  tick(stage, transitionBeat + 1);
   assert.equal(stage.cursor, 1);
 });
 
@@ -582,23 +591,23 @@ test('quarter-turn finishes a planar 90 degree handoff before the next sentence 
     ],
   });
   advance(stage, 0, 2);
-  tick(stage, 2);
+  const transitionBeat = enterNextAutomaticLine(stage);
   assert.equal(stage.lineIndex, 1);
   assert.equal(stage.cursor, 0);
   assert.equal(stage.current.track.textContent, '再读新的句子。');
   assert.equal(stage.history[0].children[0].textContent, '先读这一句。');
   const old = stage.history[0];
-  stage.frame({ beatIndex: 2, phase: 0.5 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.5 });
   const angle = Number(old.dataset.quarterAngle);
   assert.ok(angle > 0 && angle < 90);
   assert.match(old.style.transform, /rotate\(/);
   assert.doesNotMatch(old.style.transform, /rotate[XY]/);
-  tick(stage, 2, 3);
+  tick(stage, transitionBeat, 3);
   assert.equal(stage.cursor, 0);
-  stage.frame({ beatIndex: 2, phase: 0.9 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.9 });
   assert.equal(Number(old.dataset.quarterAngle), 90);
   assert.equal(stage.getState().quarterTurn.active, false);
-  tick(stage, 3);
+  tick(stage, transitionBeat + 1);
   assert.equal(stage.cursor, 1);
 });
 
@@ -614,8 +623,8 @@ test('quarter-turn pause freezes typing and pose, and selecting an existing effe
     ],
   });
   advance(stage, 0, 1);
-  tick(stage, 1);
-  stage.frame({ beatIndex: 1, phase: 0.4 });
+  const transitionBeat = enterNextAutomaticLine(stage);
+  stage.frame({ beatIndex: transitionBeat, phase: 0.4 });
   const old = stage.history[0],
     transform = old.style.transform;
   stage.setPaused(true);
@@ -626,7 +635,7 @@ test('quarter-turn pause freezes typing and pose, and selecting an existing effe
   stage.setEffect('flip');
   assert.equal(old.style.transform, transform);
   stage.setPaused(false);
-  tick(stage, 2);
+  tick(stage, transitionBeat + 1);
   assert.equal(stage.effect, 'flip');
   assert.equal(stage.getState().quarterTurn, null);
   assert.equal(old.dataset.quarterAngle, undefined);
@@ -646,8 +655,8 @@ test('resizing during a paused quarter-turn retains its musical progress and res
     ],
   });
   advance(stage, 0, 1);
-  tick(stage, 1);
-  stage.frame({ beatIndex: 1, phase: 0.4 });
+  const transitionBeat = enterNextAutomaticLine(stage);
+  stage.frame({ beatIndex: transitionBeat, phase: 0.4 });
   stage.setPaused(true);
   const progress = stage.getState().quarterTurn.progress;
   const old = stage.history[0];
@@ -662,11 +671,11 @@ test('resizing during a paused quarter-turn retains its musical progress and res
   stage.frame({ beatIndex: 10, phase: 0.9 });
   assert.equal(Number(old.dataset.quarterAngle), angle);
   stage.setPaused(false);
-  stage.frame({ beatIndex: 1, phase: 0.6 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.6 });
   assert.ok(Number(old.dataset.quarterAngle) > angle);
-  stage.frame({ beatIndex: 1, phase: 0.9 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.9 });
   assert.equal(Number(old.dataset.quarterAngle), 90);
-  tick(stage, 2);
+  tick(stage, transitionBeat + 1);
   assert.equal(stage.cursor, 1);
 });
 
@@ -688,8 +697,8 @@ test('changing the system motion preference during paused resize cannot complete
     ],
   });
   advance(stage, 0, 1);
-  tick(stage, 1);
-  stage.frame({ beatIndex: 1, phase: 0.4 });
+  const transitionBeat = enterNextAutomaticLine(stage);
+  stage.frame({ beatIndex: transitionBeat, phase: 0.4 });
   stage.setPaused(true);
   const before = stage.getState().quarterTurn;
   const old = stage.history[0];
@@ -702,7 +711,7 @@ test('changing the system motion preference during paused resize cannot complete
   assert.equal(old.dataset.quarterAngle, angle);
   assert.equal(stage.cursor, 0);
   stage.setPaused(false);
-  stage.frame({ beatIndex: 1, phase: 0.5 });
+  stage.frame({ beatIndex: transitionBeat, phase: 0.5 });
   assert.equal(stage.getState().quarterTurn.active, false);
   assert.equal(Number(old.dataset.quarterAngle), 90);
 });
@@ -1165,14 +1174,14 @@ test('layout reads all phrase widths before reserving lanes and coalesces resize
   resizeStage.destroy();
 });
 
-test('repeat remains a beat-queued navigation with one completion per pass and bounded history', () => {
+test('automatic repeat stays on four-beat boundaries with one completion per pass and bounded history', () => {
   const entered = [];
   let completed = 0;
   const stage = new KnowledgeStage(host(), {
     onLine: (index) => entered.push(index),
     onComplete: () => {
       completed++;
-      stage.requestStep(-2);
+      stage.requestStep(-2, { automatic: true });
     },
   });
   stage.setRate(4);
@@ -1182,14 +1191,14 @@ test('repeat remains a beat-queued navigation with one completion per pass and b
       { text: '应用。', keyword: '应用', holdBeats: 1 },
     ],
   });
-  advance(stage, 0, 20);
+  advance(stage, 0, 32);
   assert.ok(completed >= 3);
   assert.ok(entered.every((index, position) => index === position % 2));
   assert.equal(stage.history.length, 4);
   assert.equal(stage.el.children.length, 5);
   stage.setPaused(true);
   const frozen = stage.getState();
-  advance(stage, 20, 30);
+  advance(stage, 32, 45);
   assert.deepEqual(stage.getState(), frozen);
 });
 
@@ -1361,4 +1370,116 @@ test('resizing paused knowledge preserves its actual frozen drum style while rel
   assert.equal(track.style.translate, before.translate);
   assert.equal(stage.getState().cursor, 1);
   stage.destroy();
+});
+
+test('a complete sentence holds its original glyphs until the next four-beat boundary without changing reading rate', () => {
+  const stage = new KnowledgeStage(host());
+  stage.setAutoDirection(false);
+  stage.setEffect('typewriter');
+  stage.setRate(4);
+  stage.setScript({
+    lines: [
+      { text: '甲乙丙', keyword: '甲', holdBeats: 1 },
+      { text: '下一句', keyword: '下', holdBeats: 1 },
+    ],
+  });
+  advance(stage, 0, 1);
+  const current = stage.current;
+  const original = current.chars.map(({ el }) => el);
+  const plan = stage.getState().sentenceTiming;
+  assert.equal(stage.cursor, 3);
+  assert.equal(plan.completeAtStep, 2, 'Last glyph is on the half-beat, not rounded backwards');
+  assert.equal(plan.readableAtStep, 6);
+  assert.equal(plan.minimumEndStep, 10);
+  assert.equal(plan.earliestBeat, 3);
+  assert.equal(plan.transitionBeat, 4);
+  advance(stage, 1, 4);
+  assert.equal(stage.current, current);
+  assert.deepEqual(
+    stage.current.chars.map(({ el }) => el),
+    original,
+  );
+  assert.equal(stage.cursor, 3);
+  assert.equal(stage.rate, 4);
+  assert.deepEqual(stage.getState().sentenceTiming, plan);
+  tick(stage, 4);
+  assert.equal(stage.lineIndex, 1);
+  assert.equal(stage.cursor, 1);
+  assert.equal(stage.lastTick, 16);
+  assert.equal(stage.history[0], current.el);
+  assert.equal(stage.getState().sentenceTiming, null);
+});
+
+test('manual navigation overrides a queued automatic repeat and still acts on the next ordinary beat', () => {
+  const stage = new KnowledgeStage(host());
+  stage.setRate(4);
+  stage.setScript({
+    lines: Array.from({ length: 3 }, (_, index) => ({ text: '短句' + index, keyword: '短', holdBeats: 1 })),
+  });
+  advance(stage, 0, 1);
+  const original = stage.current;
+  stage.requestStep(-3, { automatic: true });
+  stage.requestStep(1);
+  tick(stage, 1);
+  assert.notEqual(stage.current, original);
+  assert.equal(stage.lineIndex, 1, 'Manual next must replace repeat-to-start, not combine with it');
+  assert.equal(stage.lastTick, 4);
+  assert.equal(stage.pendingStepAutomatic, false);
+});
+
+test('source feature changes and paused frames cannot consume or rewrite a completed sentence deadline', () => {
+  const stage = new KnowledgeStage(host());
+  stage.setRate(4);
+  stage.setScript({
+    lines: [
+      { text: '甲乙丙', keyword: '甲', holdBeats: 2 },
+      { text: '下一句', keyword: '下', holdBeats: 1 },
+    ],
+  });
+  advance(stage, 9, 10);
+  const plan = stage.getState().sentenceTiming;
+  assert.ok(plan.transitionBeat > 9);
+  stage.setPaused(true);
+  stage.setFeatures({ sourceGeneration: 2, bpm: 70, silent: 0, beat: 1, drum: { hit: false } });
+  tick(stage, 200);
+  stage.frame({ beatIndex: 200, phase: 0.8 });
+  assert.deepEqual(stage.getState().sentenceTiming, plan);
+  assert.equal(stage.lineIndex, 0);
+  stage.setPaused(false);
+  tick(stage, plan.transitionBeat - 1);
+  assert.equal(stage.lineIndex, 0);
+  tick(stage, plan.transitionBeat, 1);
+  assert.equal(stage.lineIndex, 0, 'A late subdivision cannot masquerade as a group boundary');
+  tick(stage, plan.transitionBeat + 1);
+  assert.equal(stage.lineIndex, 0, 'A skipped boundary cannot make the next off-group beat eligible');
+  tick(stage, plan.transitionBeat + 4);
+  assert.equal(stage.lineIndex, 1);
+});
+
+test('automatic repeat enters its first line on the same group boundary as completion', () => {
+  const entered = [],
+    completed = [];
+  const stage = new KnowledgeStage(host(), {
+    onLine: (index) => entered.push({ index, step: stage.lastTick }),
+    onComplete: () => {
+      completed.push(stage.lastTick);
+      stage.requestStep(-2, { automatic: true });
+    },
+  });
+  stage.setRate(4);
+  stage.setScript({
+    lines: [
+      { text: '甲乙', keyword: '甲', holdBeats: 1 },
+      { text: '丙丁', keyword: '丙', holdBeats: 1 },
+    ],
+  });
+  advance(stage, 0, 17);
+  assert.equal(completed.length, 2);
+  assert.deepEqual(
+    entered.map((x) => x.index),
+    [0, 1, 0, 1, 0],
+  );
+  assert.ok(entered.every((x) => x.step % 16 === 0));
+  assert.equal(entered[2].step, completed[0]);
+  assert.equal(entered[4].step, completed[1]);
 });

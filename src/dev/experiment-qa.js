@@ -9,6 +9,7 @@ import { installDrumQA } from './drum-qa.js';
 import { installMusicSectionQA } from './music-section-qa.js';
 import { installGhostQA } from './ghost-qa.js';
 import { installShowcaseRecording } from './showcase-recording.js';
+import { installSentenceQA } from './sentence-qa.js';
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const assert = (condition, message, detail) => {
@@ -30,6 +31,25 @@ const beginTrace = () => {
   window.__wadAudioTrace = [];
   window.__wadCollectTrace = true;
 };
+
+/** Observe a bounded native condition without driving the production clock.
+ * Sentence settle/hold and whole-group padding can legitimately exceed an
+ * old fixed wall-time sleep; success still requires the actual app events. */
+export async function waitForNativeQACondition(
+  inspect,
+  { timeoutMs = 12000, isActive = () => true, now = () => performance.now(), sleep = wait } = {},
+) {
+  if (typeof inspect !== 'function' || !Number.isFinite(timeoutMs) || timeoutMs < 0 || timeoutMs > 30000)
+    throw new TypeError('Native QA requires a condition and a bounded timeout.');
+  const started = now();
+  for (;;) {
+    const elapsedMs = now() - started;
+    if (!isActive()) return { conditionMet: false, timedOut: false, cancelled: true, elapsedMs };
+    if (inspect()) return { conditionMet: true, timedOut: false, cancelled: false, elapsedMs };
+    if (elapsedMs >= timeoutMs) return { conditionMet: false, timedOut: true, cancelled: false, elapsedMs };
+    await sleep(Math.min(25, timeoutMs - elapsedMs));
+  }
+}
 
 function collectMotionEvidence(app) {
   const snapshots = [];
@@ -411,6 +431,7 @@ export function installExperimentQA(app) {
   installDrumQA(app);
   installMusicSectionQA(app);
   installGhostQA(app);
+  installSentenceQA(app);
   installShowcaseRecording(app);
 
   window.__wadExperiment = {
@@ -463,6 +484,8 @@ export function installExperimentQA(app) {
 
   window.__wadQuarterTurnTest = async ({ long = false } = {}) => {
     app.setPlaying(false);
+    // This geometry fixture reads once; real automatic repeat has its own native test.
+    app.preference('repeat', false);
     await app.audio.setPaused(true);
     app.pendingTopic = null;
     app.preference('autoDirection', false);
@@ -613,6 +636,8 @@ export function installExperimentQA(app) {
 
   window.__wadTextFlowTest = async ({ long = false } = {}) => {
     app.setPlaying(false);
+    // This geometry fixture reads once; real automatic repeat has its own native test.
+    app.preference('repeat', false);
     await app.audio.setPaused(true);
     app.pendingTopic = null;
     app.preference('autoDirection', false);
@@ -783,6 +808,8 @@ export function installExperimentQA(app) {
 
   window.__wadAutomaticEffectsTest = async () => {
     app.setPlaying(false);
+    // This geometry fixture reads once; real automatic repeat has its own native test.
+    app.preference('repeat', false);
     await app.audio.setPaused(true);
     app.pendingTopic = null;
     app.preference('autoDirection', true);
@@ -1112,8 +1139,14 @@ export function installExperimentQA(app) {
       });
       const internalStart = counters(app);
       app.setPlaying(true);
+      let repeatObservation;
       try {
-        await wait(4400);
+        repeatObservation = await waitForNativeQACondition(
+          () => enters.includes(1) && enters.filter((index) => index === 0).length >= 2 && completions >= 1,
+          {
+            isActive: () => !app.destroyed && app.state.playing && app.activeTopic.id === internalTopic.id,
+          },
+        );
       } finally {
         stopLines();
         stopComplete();
@@ -1124,6 +1157,7 @@ export function installExperimentQA(app) {
         completions,
         audioSuspended: app.audio.suspended,
         source: 'internal',
+        repeatObservation,
       };
       internal.automaticAdvance = enters.includes(1);
       internal.repeat = enters.filter((index) => index === 0).length >= 2 && completions >= 1;
@@ -1132,7 +1166,8 @@ export function installExperimentQA(app) {
           internal.observedBeats === 0 &&
           internal.automaticAdvance &&
           internal.repeat &&
-          internal.audioSuspended,
+          internal.audioSuspended &&
+          repeatObservation.conditionMet,
         'Continuous clock or automatic sentence/repeat failed',
         internal,
       );

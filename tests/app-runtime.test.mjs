@@ -455,3 +455,21 @@ test('rapid language choices and app disposal retire old asynchronous locale com
   assert.equal(await later, false);
   assert.equal(app.state.preferences.language, 'zh');
 });
+
+test('completion marks repeat as automatic while manual navigation keeps the ordinary next-beat path', async () => {
+  const r = runtime(),
+    app = new AppController(r.options),
+    steps = [];
+  r.ui.setComplete = () => {};
+  r.knowledge.requestStep = (...args) => steps.push(args);
+  await app.boot();
+  app.onComplete();
+  assert.deepEqual(steps.at(-1), [-app.activeTopic.lines.length, { automatic: true }]);
+  app.step(1);
+  assert.deepEqual(steps.at(-1), [1]);
+  app.state.preferences.repeat = false;
+  const count = steps.length;
+  app.onComplete();
+  assert.equal(steps.length, count);
+  await app.destroy();
+});

@@ -200,6 +200,9 @@ function evaluateSmokeResult(
     result.quarterTurnPass &&
     result.textFlowPass &&
     result.automaticEffects?.pass &&
+    result.sentenceTiming?.pass &&
+    result.sentenceTiming?.actualWebAudio &&
+    result.sentenceTiming?.labelsFedToDetector === false &&
     result.twoBeatDance?.pass &&
     result.drumMotion?.pass &&
     result.drumMotion?.actualWebAudio &&
@@ -490,6 +493,14 @@ async function runSmokeChecks(
     );
   } catch (error) {
     result.automaticEffects = { pass: false, error: error.message };
+  }
+  try {
+    result.sentenceTiming = await window.webContents.executeJavaScript(
+      'window.__wadSentenceSmokeTest()',
+      true,
+    );
+  } catch (error) {
+    result.sentenceTiming = { pass: false, error: error.message };
   }
   try {
     result.twoBeatDance = await window.webContents.executeJavaScript('window.__wadTwoBeatDanceTest()', true);

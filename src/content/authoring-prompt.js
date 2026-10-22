@@ -59,7 +59,7 @@ lines 包含 1～40 行。每行 text 是一个完整短句，不含换行，最
 
 每行 keyword 是本句主题，必须完整、原样出现在 text 中，不能为了匹配关键词在程序里补写原文。keywords 包含 1～8 项，每项 text 是 1～12 个可见字符、在本句 text 中完整出现的词。唯一一个 role:"primary" 的 text 必须与本行 keyword 完全相同；其余均为 role:"secondary"。不要重复同一个关键词，保留文字、大小写和 emoji 的完整字符。
 
-sentenceType 可选，仅使用：${SCRIPT_SENTENCE_TYPES.join('、')}。关系 relation 可选，放在对应关键词项内，包含 from、to、type、label；from 和 to 都必须是全文 keywords 已声明且实际出现的概念，to 必须与所在关键词 text 相同。type 仅使用：${SCRIPT_RELATION_TYPES.join('、')}。只写材料支持的关系，不知道具体关系时用 related 或省略 relation，绝不因为动画效果而编造因果。label 是最多 60 个可见字符的单行简短说明。可选 holdBeats 是 1～32 的整数，默认 8。
+sentenceType 可选，仅使用：${SCRIPT_SENTENCE_TYPES.join('、')}。关系 relation 可选，放在对应关键词项内，包含 from、to、type、label；from 和 to 都必须是全文 keywords 已声明且实际出现的概念，to 必须与所在关键词 text 相同。type 仅使用：${SCRIPT_RELATION_TYPES.join('、')}。只写材料支持的关系，不知道具体关系时用 related 或省略 relation，绝不因为动画效果而编造因果。label 是最多 60 个可见字符的单行简短说明。可选 holdBeats 是 1～32 的整数，默认 8；它是完整文字留1拍入场缓冲后的最小阅读停留。播放器再按整拍补到内部四拍分组边界切句，并不识别真实小节。不要补字或标点来凑拍。
 
 完整格式示例（对应示例原材料：“节拍是音乐的时间参照。速度可以用BPM表达。”；请替换为我提供的材料，勿保留示例内容）：
 ${JSON.stringify(example, null, 2)}
@@ -117,7 +117,7 @@ Provide 1–40 lines. Each text must be a complete short sentence without line b
 
 Each line's keyword is its main concept and must appear exactly, including case, in text. Its keywords array contains 1–8 entries. Each entry's text is 1–12 visible characters and must appear exactly in that sentence. Exactly one entry has role:"primary", and its text must equal the line's keyword. Every other entry has role:"secondary". Do not repeat a keyword. Preserve complete characters, case, and emoji.
 
-Optional sentenceType must be one of: ${SCRIPT_SENTENCE_TYPES.join(', ')}. An optional relation belongs inside a keyword entry and contains from, to, type, label. Both endpoints must refer to real keywords declared somewhere in the script; to must equal this entry's text. type must be one of: ${SCRIPT_RELATION_TYPES.join(', ')}. Include only relationships supported by the material; use related or omit relation when unsure. Never invent causality to obtain an animation. label is a single-line description of at most 60 visible characters. Optional holdBeats is an integer from 1 to 32, default 8.
+Optional sentenceType must be one of: ${SCRIPT_SENTENCE_TYPES.join(', ')}. An optional relation belongs inside a keyword entry and contains from, to, type, label. Both endpoints must refer to real keywords declared somewhere in the script; to must equal this entry's text. type must be one of: ${SCRIPT_RELATION_TYPES.join(', ')}. Include only relationships supported by the material; use related or omit relation when unsure. Never invent causality to obtain an animation. label is a single-line description of at most 60 visible characters. Optional holdBeats is an integer from 1 to 32, default 8: the minimum readable hold after a one-beat settling allowance for the full text. The player then pads whole beats to an internal four-beat group boundary; it does not detect musical bars. Do not add filler words or punctuation to fill beats.
 
 Complete format example, based only on “A beat is a reference for musical time. BPM describes tempo.” Replace this example with my material:
 ${JSON.stringify(example, null, 2)}

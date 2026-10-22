@@ -12,11 +12,16 @@ const graphemes = (text) => [...segmenter.segment(text)].map((entry) => entry.se
 
 test('every curated line has several literal concepts with exact display ranges', () => {
   let conceptCount = 0;
+  let minimumConceptCount = 0;
   for (const topic of sampleLibrary) {
     const knownTerms = new Set();
     for (const line of topic.lines) {
       assert.ok(line.text.includes(line.keyword), line.id);
-      assert.ok(line.keywords.length >= 3, `${line.id} needs multiple concepts`);
+      // The 100 short additions explicitly pair primary/secondary concepts;
+      // the requested one-line Easter egg deliberately has a single concept.
+      const minimum = topic.id === 'easter-egg' ? 1 : topic.id.startsWith('extended-') ? 2 : 3;
+      minimumConceptCount += minimum;
+      assert.ok(line.keywords.length >= minimum, `${line.id} needs its complete concept set`);
       const glyphs = graphemes(line.text);
       const markers = findKnowledgeMarkers(line);
       for (const concept of line.keywords) {
@@ -35,19 +40,29 @@ test('every curated line has several literal concepts with exact display ranges'
       assert.ok(knownTerms.has(relation.to), `${topic.id}: missing destination ${relation.to}`);
     }
   }
-  assert.ok(conceptCount >= sampleLibrary.flatMap((topic) => topic.lines).length * 3);
+  assert.ok(conceptCount >= minimumConceptCount);
 });
 
 test('curated within-line relations refer to literal source/destination concepts and carry useful labels', () => {
   for (const topic of sampleLibrary) {
+    const topicTerms = new Set(topic.lines.flatMap((line) => line.keywords.map((entry) => entry.text)));
     for (const line of topic.lines) {
       const terms = new Set(line.keywords.map((entry) => entry.text));
       for (const concept of line.keywords) {
         if (!concept.relation) continue;
         const relation = concept.relation;
         assert.equal(relation.to, concept.text);
-        assert.ok(terms.has(relation.from), `${line.id}: ${relation.from}`);
-        assert.ok(line.text.includes(relation.from) && line.text.includes(relation.to));
+        if (concept.role === 'primary') {
+          // Incoming primary links intentionally connect the previous sentence's
+          // dancing word to the current one, rather than inventing a local word.
+          const previous = topic.lines[topic.lines.indexOf(line) - 1];
+          assert.ok(previous, `${line.id}: incoming links require a preceding line`);
+          assert.equal(relation.from, previous.keyword);
+          assert.ok(topicTerms.has(relation.from) && line.text.includes(relation.to));
+        } else {
+          assert.ok(terms.has(relation.from), `${line.id}: ${relation.from}`);
+          assert.ok(line.text.includes(relation.from) && line.text.includes(relation.to));
+        }
         assert.ok(typeof relation.type === 'string' && relation.type.length > 0);
         assert.ok(typeof relation.label === 'string' && relation.label.length > 0);
       }

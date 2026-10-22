@@ -8,6 +8,7 @@ import { selectKnowledgeEffect, usesDirectedKnowledgeLayout } from './knowledge-
 import { EFFECTS as EFFECT_CATALOG } from './effect-catalog.js';
 import { createKnowledgeLine, refreshKnowledgeLine } from './knowledge-line.js';
 import { KnowledgeDrumResponse } from './knowledge-drum-response.js';
+import { planSentenceBoundary, SENTENCE_GROUP_BEATS } from '../playback/sentence-boundary.js';
 
 const EFFECTS = new Set(EFFECT_CATALOG.filter(({ implemented }) => implemented).map(({ id }) => id));
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
@@ -50,7 +51,8 @@ export class KnowledgeStage {
     this.cursor = 0;
     this.finished = false;
     this.pendingStep = null;
-    this.completeAtBeat = null;
+    this.pendingStepAutomatic = false;
+    this.sentenceTiming = null;
     this.lastTick = null;
     this.destroyed = false;
     el.classList.add('knowledge-stage');
@@ -109,7 +111,8 @@ export class KnowledgeStage {
     this.keyword = typeof initialKeyword === 'string' ? initialKeyword : '';
     this.finished = this.lines.length === 0;
     this.pendingStep = null;
-    this.completeAtBeat = null;
+    this.pendingStepAutomatic = false;
+    this.sentenceTiming = null;
     this.lastTick = null;
     this.scene = null;
     this.inkLayout = null;
@@ -151,13 +154,24 @@ export class KnowledgeStage {
     this.el.dataset.paused = String(this.paused);
   }
 
-  requestStep(delta) {
+  requestStep(delta, { automatic = false } = {}) {
     if (!this.lines.length || !Number.isFinite(delta) || delta === 0) return;
+    // Explicit navigation takes priority over a queued automatic repeat.
+    if (automatic && this.pendingStep !== null && !this.pendingStepAutomatic) return;
+    if (this.pendingStepAutomatic && !automatic) this.pendingStep = null;
+    this.pendingStepAutomatic = automatic === true;
     this.pendingStep = clamp(
       (this.pendingStep || 0) + Math.trunc(delta),
       -this.lines.length,
       this.lines.length,
     );
+  }
+
+  commitPendingStep() {
+    const target = clamp(this.lineIndex + this.pendingStep, 0, this.lines.length - 1);
+    this.pendingStep = null;
+    this.pendingStepAutomatic = false;
+    this.mount(target);
   }
 
   onTick(event, features = {}) {
@@ -168,6 +182,7 @@ export class KnowledgeStage {
     if (!Number.isSafeInteger(event.beatIndex) || event.beatIndex < 0) return;
     if ((event.kind === 'beat') !== (subdivision === 0)) return;
     const identity = event.beatIndex * 4 + subdivision;
+    if (!Number.isSafeInteger(identity)) return;
     if (this.lastTick !== null && identity <= this.lastTick) return;
     this.lastTick = identity;
     const beat = event.kind === 'beat' && subdivision === 0;
@@ -210,25 +225,31 @@ export class KnowledgeStage {
       this.pendingDirection = false;
       this.applyDirection(this.lines[this.lineIndex], { refresh: true });
     }
-    if (beat && this.pendingStep !== null) {
-      const target = clamp(this.lineIndex + this.pendingStep, 0, this.lines.length - 1);
-      this.pendingStep = null;
-      this.mount(target);
-    }
+    const groupBoundary = beat && event.beatIndex % SENTENCE_GROUP_BEATS === 0;
+    if (beat && this.pendingStep !== null && (!this.pendingStepAutomatic || groupBoundary))
+      this.commitPendingStep();
     if (!this.current) this.mount(this.lineIndex);
-    if (this.current.chars.length === 0 && this.completeAtBeat === null)
-      this.completeAtBeat = event.beatIndex;
+    if (this.current.chars.length === 0 && this.sentenceTiming === null)
+      this.sentenceTiming = planSentenceBoundary({
+        completeAtStep: identity,
+        holdBeats: this.lines[this.lineIndex].holdBeats,
+      });
 
     if (
       beat &&
-      this.completeAtBeat !== null &&
+      this.sentenceTiming !== null &&
       !this.finished &&
-      event.beatIndex - this.completeAtBeat >= this.lines[this.lineIndex].holdBeats
+      groupBoundary &&
+      event.beatIndex >= this.sentenceTiming.transitionBeat
     ) {
       if (this.lineIndex < this.lines.length - 1) this.mount(this.lineIndex + 1);
       else {
         this.finished = true;
         this.onComplete();
+        if (this.destroyed || this.paused) return;
+        // App-owned automatic repeat can begin on this same group boundary.
+        // A manual request remains queued for the next ordinary shared beat.
+        if (this.pendingStep !== null && this.pendingStepAutomatic) this.commitPendingStep();
       }
     }
 
@@ -242,7 +263,11 @@ export class KnowledgeStage {
       (this.revealAfterTick === null || identity >= this.revealAfterTick)
     ) {
       this.reveal(duration);
-      if (this.cursor === this.current.chars.length) this.completeAtBeat = event.beatIndex;
+      if (this.cursor === this.current.chars.length)
+        this.sentenceTiming = planSentenceBoundary({
+          completeAtStep: identity,
+          holdBeats: this.lines[this.lineIndex].holdBeats,
+        });
     }
     if (beat) {
       // Re-enable ordinary decorative pulses only on the next shared beat,
@@ -296,7 +321,7 @@ export class KnowledgeStage {
 
     this.lineIndex = index;
     this.cursor = 0;
-    this.completeAtBeat = null;
+    this.sentenceTiming = null;
     this.finished = false;
     this.positionHistory();
     this.current = createKnowledgeLine(this.document, line, {
@@ -687,6 +712,10 @@ export class KnowledgeStage {
     return {
       lineIndex: this.lineIndex,
       cursor: this.cursor,
+      totalChars: this.current?.chars.length || 0,
+      lastTick: this.lastTick,
+      completeAtStep: this.sentenceTiming?.completeAtStep ?? null,
+      sentenceTiming: this.sentenceTiming ? { ...this.sentenceTiming } : null,
       lineCount: this.lines.length,
       keyword: this.keyword,
       finished: this.finished,

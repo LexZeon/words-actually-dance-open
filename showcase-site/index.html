@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Watch actual Words Actually Dance recordings. Four silent song-driven previews and four demonstrations with original music."
+    />
+    <title>Words Actually Dance — Film room</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' fill='black'/%3E%3Ctext x='24' y='34' text-anchor='middle' font-size='34' font-family='sans-serif' font-weight='800' fill='white'%3EW%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#screen" data-i18n="skip">Skip to video</a>
+    <header class="site-header shell">
+      <a
+        class="wordmark"
+        href="./?clip=full&amp;lang=en"
+        id="home-link"
+        aria-label="Words Actually Dance film room"
+      >
+        <span class="wordmark-symbol" aria-hidden="true">W<span>↗</span></span>
+        <span>Words Actually Dance<span class="wordmark-subtitle" data-i18n="room">Film room</span></span>
+      </a>
+      <nav class="header-actions" aria-label="Language and source" id="header-nav">
+        <div class="languages" role="group" aria-label="Language" id="language-group">
+          <button type="button" data-language="en" lang="en" aria-pressed="true">EN</button>
+          <button type="button" data-language="zh" lang="zh-Hans" aria-pressed="false">中文</button>
+        </div>
+        <a
+          class="source-link"
+          href="https://github.com/LexZeon/words-actually-dance-open"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-i18n="github"
+          >Source on GitHub</a
+        >
+      </nav>
+    </header>
+
+    <main class="shell">
+      <section class="introduction" aria-labelledby="page-title">
+        <h1 id="page-title" data-i18n="headline">Watch the words move.</h1>
+        <p data-i18n="introduction">
+          Actual recordings. A little reading, a little rhythm, and room to pause.
+        </p>
+      </section>
+
+      <div class="film-room">
+        <section class="screen-column" aria-labelledby="clip-title">
+          <div class="screen" id="screen" tabindex="-1">
+            <video
+              id="player"
+              controls
+              playsinline
+              muted
+              preload="metadata"
+              poster="./media/poster.webp"
+              aria-label="Selected demonstration video"
+            ></video>
+            <div class="play-cover" id="play-cover">
+              <button type="button" class="play-button" id="play-button">
+                <span aria-hidden="true">▶</span><span id="play-label">Play video</span>
+              </button>
+            </div>
+          </div>
+          <div class="playback-line">
+            <span class="audio-description" id="audio-description">Original music · sound off</span>
+            <button type="button" class="text-button" id="sound-button">Turn sound on</button>
+          </div>
+          <p class="player-message" id="player-message" role="status" aria-live="polite"></p>
+
+          <div class="clip-heading">
+            <div>
+              <p class="clip-category" id="clip-category">Original music</p>
+              <h2 id="clip-title">The full picture</h2>
+            </div>
+            <span class="clip-duration" id="clip-duration">32s</span>
+          </div>
+          <p class="clip-description" id="clip-description">
+            Three complete clips with different original audio styles, joined with simple cuts.
+          </p>
+          <dl class="credits" id="clip-credits"></dl>
+          <div class="clip-actions">
+            <a
+              class="download-button"
+              id="download-link"
+              href="./media/demo-full.mp4"
+              download="demo-full.mp4"
+              ><span aria-hidden="true">↓</span><span data-i18n="download">Download preview video</span></a
+            >
+            <a
+              class="secondary-button"
+              id="song-link"
+              href="https://www.bilibili.com/video/BV1Zopb6KEFo/"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+              ><span data-i18n="openSong">Open source song</span><span aria-hidden="true">↗</span></a
+            >
+            <button type="button" class="text-button share-button" id="share-button" data-i18n="share">
+              Copy video link
+            </button>
+          </div>
+          <p class="rights-note" id="rights-note"></p>
+        </section>
+
+        <aside class="playlist" aria-labelledby="playlist-title">
+          <div class="playlist-heading">
+            <h2 id="playlist-title" data-i18n="choose">Choose a recording</h2>
+            <span aria-label="8 videos">8</span>
+          </div>
+          <div id="clip-list"></div>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="site-footer shell">
+      <p data-i18n="footer">
+        This is a video gallery. The recordings demonstrate software, not proven learning benefits or beat
+        accuracy.
+      </p>
+      <a
+        id="credits-link"
+        href="https://github.com/LexZeon/words-actually-dance-open/blob/main/MUSIC-CREDITS.md#english"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-i18n="fullCredits"
+        >Full music credits</a
+      >
+    </footer>
+    <noscript
+      ><p class="shell">
+        Enable JavaScript to choose a video. / 启用 JavaScript 后可选择视频。<a
+          href="./media/demo-full.mp4"
+          download
+          >Download original-music demo / 下载原创配乐演示</a
+        >
+      </p></noscript
+    >
+  </body>
+</html>

@@ -28,6 +28,7 @@ const valid = () => ({
   quarterTurnPass: true,
   textFlowPass: true,
   automaticEffects: { pass: true },
+  sentenceTiming: { pass: true, actualWebAudio: true, labelsFedToDetector: false },
   twoBeatDance: { pass: true },
   drumMotion: { pass: true, actualWebAudio: true, referenceLabelsFedToDetector: false },
   drumReference: { pass: true },
@@ -59,6 +60,9 @@ test('native success requires each requested audio path and a confirmed referenc
     { quarterTurnPass: false },
     { textFlowPass: false },
     { automaticEffects: { pass: false } },
+    { sentenceTiming: { pass: false, actualWebAudio: true, labelsFedToDetector: false } },
+    { sentenceTiming: { pass: true, actualWebAudio: false, labelsFedToDetector: false } },
+    { sentenceTiming: { pass: true, actualWebAudio: true, labelsFedToDetector: true } },
     { twoBeatDance: { pass: false } },
     { drumMotion: { pass: false, actualWebAudio: true, referenceLabelsFedToDetector: false } },
     { drumMotion: { pass: true, actualWebAudio: false, referenceLabelsFedToDetector: false } },
@@ -120,6 +124,8 @@ function runner({ referenceExit = 0, referenceError = '', missingHooks = false }
         if (script.includes('__wadQuarterTurnTest')) return { pass: true };
         if (script.includes('__wadTextFlowTest')) return { pass: true };
         if (script.includes('__wadAutomaticEffectsTest')) return { pass: true };
+        if (script.includes('__wadSentenceSmokeTest'))
+          return { pass: true, actualWebAudio: true, labelsFedToDetector: false };
         if (script.includes('__wadTwoBeatDanceTest')) return { pass: true };
         if (script.includes('__wadDrumReadabilityTest')) return { pass: true };
         if (script.includes('__wadDrumSmokeTest')) return mockDrumResult();

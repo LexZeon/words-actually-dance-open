@@ -5,9 +5,25 @@ import { localizeSampleTopic } from '../src/content/sample-translations.js';
 import { parseScriptInput, serializeScriptDocument } from '../src/content/script-document.js';
 import { literalGraphemeIndex, splitGraphemes } from '../src/content/text-boundaries.js';
 
-test('all nine English editions use the real import/export contract with stable source IDs and beats', () => {
+test('all 110 local editions retain source IDs, beat budgets and the exact requested easter egg', () => {
   const before = structuredClone(sampleLibrary);
-  assert.equal(sampleLibrary.length, 9);
+  assert.equal(sampleLibrary.length, 110);
+  assert.deepEqual(
+    sampleLibrary.slice(0, 9).map((topic) => topic.id),
+    [
+      'rhythm',
+      'resonance',
+      'compound',
+      'focus',
+      'parallel',
+      'connection',
+      'learning-retrieval',
+      'learning-spacing',
+      'learning-working-memory',
+    ],
+    'existing saved sample indices retain their meanings',
+  );
+  assert.equal(sampleLibrary.at(-1).id, 'easter-egg');
   for (const source of sampleLibrary) {
     const english = localizeSampleTopic(source, 'en');
     assert.notEqual(english, source);
@@ -23,7 +39,8 @@ test('all nine English editions use the real import/export contract with stable 
       assert.equal(restored.lines[index].text, line.text);
       assert.equal(restored.lines[index].keyword, line.keyword);
       assert.equal(line.keywords.length, source.lines[index].keywords.length);
-      assert.ok(!/\p{Script=Han}/u.test(line.text));
+      if (source.id === 'easter-egg') assert.equal(line.text, '你怎么找到这里的');
+      else assert.ok(!/\p{Script=Han}/u.test(line.text));
       for (const entry of line.keywords) {
         const start = literalGraphemeIndex(line.text, entry.text);
         assert.ok(start >= 0, `${line.id}: visible concept ${entry.text}`);

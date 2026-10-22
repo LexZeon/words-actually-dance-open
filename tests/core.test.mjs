@@ -83,7 +83,10 @@ test('curated scripts can locate their exact emphasis targets and have no wall-c
   for (const chapter of sampleLibrary) {
     assert.ok(!chapterIds.has(chapter.id), `Duplicate chapter ${chapter.id}`);
     chapterIds.add(chapter.id);
-    assert.ok(chapter.lines.length >= 3);
+    if (chapter.id === 'easter-egg') {
+      assert.equal(chapter.lines.length, 1);
+      assert.equal(chapter.lines[0].text, '你怎么找到这里的');
+    } else assert.ok(chapter.lines.length >= 3);
     for (const line of chapter.lines) {
       assert.ok(line.keyword && line.text.includes(line.keyword), `Cannot emphasize ${line.id}`);
       assert.ok(Number.isInteger(line.holdBeats) && line.holdBeats > 0, `Invalid beat duration ${line.id}`);

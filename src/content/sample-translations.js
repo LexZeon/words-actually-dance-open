@@ -1,5 +1,11 @@
 import { sampleLibrary } from './sample-library.js';
 import { annotateConcepts } from './concept-graph.js';
+import {
+  extendedLibrary,
+  extendedEnglishLibrary,
+  easterEggTopic,
+  easterEggEnglishTopic,
+} from './extended-library.js';
 
 // Original English editions of the curated examples. Imported/user-authored
 // content is never sent to a translation service or replaced by a matching ID.
@@ -310,11 +316,17 @@ const editions = {
 const sources = new Set(sampleLibrary);
 const englishTopics = new WeakMap();
 const originals = new WeakMap();
+for (const [index, topic] of extendedLibrary.entries()) {
+  englishTopics.set(topic, extendedEnglishLibrary[index]);
+  originals.set(extendedEnglishLibrary[index], topic);
+}
+englishTopics.set(easterEggTopic, easterEggEnglishTopic);
+originals.set(easterEggEnglishTopic, easterEggTopic);
 
 function englishEdition(source) {
+  if (englishTopics.has(source)) return englishTopics.get(source);
   const edition = editions[source.id];
   if (!edition) return source;
-  if (englishTopics.has(source)) return englishTopics.get(source);
   if (edition.lines.length !== source.lines.length || edition.relations.length !== source.relations.length)
     throw new Error(`Curated translation structure does not match ${source.id}`);
   const terms = new Map();

@@ -1,7 +1,8 @@
 import { annotateConcepts } from './concept-graph.js';
 import { learningLibrary } from './learning-library.js';
+import { extendedLibrary, easterEggTopic } from './extended-library.js';
 
-/** Curated local examples. These are static text, not AI-generated output. */
+/** Curated local examples. No AI service runs inside the application. */
 export const sampleLibrary = [
   {
     id: 'rhythm',
@@ -287,6 +288,6 @@ sampleLibrary.forEach((topic, index) => {
   topic.lines = topic.lines.map((line, i) => annotateConcepts(line, concepts[index][i]));
 });
 
-sampleLibrary.push(...learningLibrary);
+sampleLibrary.push(...learningLibrary, ...extendedLibrary, easterEggTopic);
 
 export default sampleLibrary;

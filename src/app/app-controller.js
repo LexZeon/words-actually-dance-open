@@ -210,7 +210,8 @@ export class AppController {
   onComplete() {
     this.ui.setComplete(this.state.preferences.repeat);
     this.bus.emit(EVENTS.CONTENT_COMPLETE, { id: this.activeTopic.id });
-    if (this.state.preferences.repeat) this.knowledge.requestStep(-this.activeTopic.lines.length);
+    if (this.state.preferences.repeat)
+      this.knowledge.requestStep(-this.activeTopic.lines.length, { automatic: true });
   }
 
   setPlaying(value) {
