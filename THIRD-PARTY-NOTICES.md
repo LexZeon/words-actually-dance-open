@@ -24,6 +24,8 @@
 
 用户提供的音乐风格观察链接：[Die for You](https://www.bilibili.com/video/BV1Zopb6KEFo/)、[另一片段（1:19–1:53）](https://www.bilibili.com/video/BV1Eqh9z1EcP/)、[副歌片段（2:04起）](https://www.bilibili.com/video/BV1Kmpc6zEi3/)。用户明确未取得公开视频配乐许可，选择自产配乐并附参考链接；这些录音不混入公开演示或随仓库及软件分发。本地私有歌曲测试录制独立保存，不在公开快照中。来源链接不授予录音、词曲或同步配乐权利。
 
+🎼 每首参考歌曲的原曲演唱、词曲／编曲与版本上传者分别记录在[音乐署名 / Music credits](MUSIC-CREDITS.md)，包括The Weeknd、银临／Aki阿杰／Vagary、MC몽／멜로우／김건우／박장근／송기홍等已核实署名；版本链待核实之处保持明确，上传者不冒充原作者。
+
 学习方法的原始研究、作者与适用边界见[学习说明](docs/learning-science.md)。原创示例转述通用方法，没有分发论文全文、图表或原实验素材；这些研究不是本产品音乐、动画或整体学习效果的验证。
 
 ## 后续采用

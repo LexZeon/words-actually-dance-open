@@ -71,6 +71,14 @@ await publishWindowsPackage({
       ),
       path.join(appDirectory, 'THIRD-PARTY-NOTICES.md'),
     );
+    const musicCredits = path.join(workspace, 'MUSIC-CREDITS.md');
+    await fs.copyFile(
+      await fs.access(musicCredits).then(
+        () => musicCredits,
+        () => path.join(workspace, 'public-docs', 'MUSIC-CREDITS.md'),
+      ),
+      path.join(appDirectory, 'MUSIC-CREDITS.md'),
+    );
     await fs.writeFile(
       path.join(appDirectory, 'package.json'),
       JSON.stringify(packagedManifest, null, 2),

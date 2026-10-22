@@ -1,4 +1,5 @@
 import { MusicSectionDetector } from '../audio/music-section.js';
+import { onsetAgeSeconds, onsetEnvelope, onsetPriority } from './onset-priority.js';
 
 /**
  * Finite one-beat choreography with optional continuous two-beat body paths.
@@ -521,6 +522,8 @@ export class MotionDirector {
     this.lastSwitch = -Infinity;
     this.changeEvidence = { changed: false, score: 0, cues: [] };
     this.accent = null;
+    this.bodyAccent = null;
+    this.lastDrumTime = -Infinity;
     this.lastDrumSequence = null;
     this.lastObservedFlag = false;
     this.section = new MusicSectionDetector();
@@ -546,6 +549,8 @@ export class MotionDirector {
     this.pendingSelection = null;
     this.pendingCount = 0;
     this.accent = null;
+    this.bodyAccent = null;
+    this.lastDrumTime = -Infinity;
     this.lastObservedFlag = false;
     this.resetSectionMotion();
   }
@@ -597,6 +602,8 @@ export class MotionDirector {
       this.started += gap;
       this.carryStarted += gap;
       if (this.accent) this.accent.started += gap;
+      if (this.bodyAccent && this.bodyAccent !== this.accent) this.bodyAccent.started += gap;
+      if (Number.isFinite(this.lastDrumTime)) this.lastDrumTime += gap;
       this.section.holdTime(time);
       if (Number.isFinite(this.lastBeat)) this.lastBeat += gap;
       this.paused = false;
@@ -611,6 +618,7 @@ export class MotionDirector {
       includeCycle: false,
       includeAccent: false,
       includePhrase: false,
+      includeDrumPriority: false,
     });
     const suppliedBeatIndex = Number.isSafeInteger(features.beatIndex) && features.beatIndex >= 0;
     // Musical index is separate from smoothed measurements, including silence.
@@ -619,6 +627,8 @@ export class MotionDirector {
       this.sourceGeneration = features.sourceGeneration;
       this.resetSectionMotion();
       this.accent = null;
+      this.bodyAccent = null;
+      this.lastDrumTime = -Infinity;
     }
     const silent = Boolean(features.silent);
     this.audioSilent = Boolean(features.audioSilent ?? features.musicSilent) || features.signalValid === 0;
@@ -647,11 +657,19 @@ export class MotionDirector {
       time,
     );
     this.observeSection(section, { allowPending: !silent && !this.audioSilent });
-    if (this.audioSilent || silent) this.accent = null;
-    else if (freshDrum && drumKinds.has(drum.kind) && unit(drum.confidence) >= 0.2 && unit(drum.weight) > 0) {
-      const carry = this.sampleAccentMotion(time, { glyphCount, reducedMotion });
+    if (this.audioSilent || silent) {
+      this.accent = null;
+      this.bodyAccent = null;
+    } else if (
+      freshDrum &&
+      drumKinds.has(drum.kind) &&
+      unit(drum.confidence) >= 0.2 &&
+      unit(drum.weight) > 0
+    ) {
+      const started = time - onsetAgeSeconds(drum);
+      this.lastDrumTime = started;
       this.accent = {
-        started: time,
+        started,
         duration: clamp((0.13 + unit(drum.weight) * 0.13) * (drum.kind === 'tick' ? 0.72 : 1), 0.1, 0.26),
         strength: unit(drum.strength),
         weight: unit(drum.weight),
@@ -662,10 +680,12 @@ export class MotionDirector {
         gridPhase: next.beatPhase,
         source: 'drum',
         evidence: 'spectral-transient',
-        carry: carry.accent.active ? carry : null,
       };
+      // A hi-hat must not truncate the still-visible body of a real kick/snare.
+      // Only one body and one character accent can coexist; neither restarts.
+      if (drum.kind !== 'tick') this.bodyAccent = this.accent;
     } else if (
-      !drum &&
+      onsetPriority(this.lastDrumTime, time) === 0 &&
       observedRising &&
       (unit(features.observedConfidence) >= 0.55 ||
         (unit(features.observedStrength) >= 0.18 && unit(features.amplitudeRise) >= 0.25))
@@ -678,6 +698,7 @@ export class MotionDirector {
         source: 'observed',
         evidence: features.observedAccentSource ?? 'periodic-onset',
       };
+      this.bodyAccent = null;
     }
     if (silent && !this.silent) {
       this.carry = previous;
@@ -759,6 +780,7 @@ export class MotionDirector {
       includeCycle = true,
       includeAccent = true,
       includePhrase = true,
+      includeDrumPriority = true,
     } = {},
   ) {
     if (this.paused) time = this.pausedAt;
@@ -800,6 +822,16 @@ export class MotionDirector {
     });
     if (includeCycle) addMotion(output, cycle, 1);
     output.cycle = cycle.cycle;
+    const priority = includeDrumPriority ? onsetPriority(this.lastDrumTime, time) : 0;
+    const gridGain = 1 - priority * 0.86;
+    // Keep every shared-phase path alive, but make measured attacks the main
+    // visual events instead of competing with a large halfway-through-beat peak.
+    for (const movement of [output.group, ...output.glyphs]) {
+      for (const key of ['x', 'y', 'rotation']) movement[key] *= gridGain;
+      for (const key of ['scaleX', 'scaleY']) movement[key] = 1 + (movement[key] - 1) * gridGain;
+    }
+    output.envelope *= gridGain;
+    output.drumPriority = { active: priority > 0, amount: priority, gridGain };
     const accentMotion = this.sampleAccentMotion(time, { glyphCount, reducedMotion, glyphOrders });
     if (includeAccent) addMotion(output, accentMotion, 1);
     output.accent = accentMotion.accent;
@@ -810,7 +842,11 @@ export class MotionDirector {
         p = phrase.phase;
       const level = unit(Math.log1p(f.amplitude * 35) / Math.log1p(0.35 * 35));
       const gain =
-        this.intensity * (0.5 + level * 0.5) * (0.6 + phrase.probability * 0.4) * (reducedMotion ? 0.08 : 1);
+        this.intensity *
+        (0.5 + level * 0.5) *
+        (0.6 + phrase.probability * 0.4) *
+        gridGain *
+        (reducedMotion ? 0.08 : 1);
       output.group.x += Math.sin(p * Math.PI * 2) * h * gain * 0.11;
       output.group.y -= h * gain * (0.12 + f.amplitudeTrend * 0.07 + f.frequencyTrend * 0.055);
       output.group.rotation += Math.sin(p * Math.PI * 2) * h * gain * (0.13 + f.brightness * 0.12);
@@ -853,32 +889,29 @@ export class MotionDirector {
     };
   }
 
-  sampleAccent(time, reducedMotion = false) {
+  sampleAccent(time, reducedMotion = false, command = this.accent) {
     if (this.paused) time = this.pausedAt;
-    const age = this.accent ? Math.max(0, finite(time) - this.accent.started) : Infinity;
-    const peakSeconds = 0.024;
+    const age = command ? Math.max(0, finite(time) - command.started) : Infinity;
+    const peakSeconds = 0;
     const envelope =
-      !this.accent || age >= this.accent.duration
+      !command || age >= command.duration
         ? 0
-        : (age <= peakSeconds
-            ? ease(age / peakSeconds)
-            : 1 - ease((age - peakSeconds) / (this.accent.duration - peakSeconds))) *
-          (0.55 + this.accent.strength * 0.45);
+        : onsetEnvelope(age, command.duration) * (0.55 + command.strength * 0.45);
     return {
-      source: this.accent?.source || null,
-      evidence: this.accent?.evidence || null,
+      source: command?.source || null,
+      evidence: command?.evidence || null,
       active: envelope > 0,
       envelope,
       ageSeconds: Number.isFinite(age) ? age : 0,
       peakSeconds,
-      durationSeconds: this.accent?.duration ?? 0,
-      kind: this.accent?.kind ?? null,
-      sequence: this.accent?.sequence ?? null,
-      sourceGeneration: this.accent?.sourceGeneration ?? null,
-      weight: this.accent?.weight ?? 0,
-      strength: this.accent?.strength ?? 0,
-      confidence: this.accent?.confidence ?? 0,
-      gridPhaseAtOnset: this.accent?.gridPhase ?? 0,
+      durationSeconds: command?.duration ?? 0,
+      kind: command?.kind ?? null,
+      sequence: command?.sequence ?? null,
+      sourceGeneration: command?.sourceGeneration ?? null,
+      weight: command?.weight ?? 0,
+      strength: command?.strength ?? 0,
+      confidence: command?.confidence ?? 0,
+      gridPhaseAtOnset: command?.gridPhase ?? 0,
       reducedMotion,
     };
   }
@@ -886,6 +919,20 @@ export class MotionDirector {
   sampleAccentMotion(time, { glyphCount = 1, reducedMotion = false, glyphOrders } = {}) {
     const output = neutralMotion(glyphCount);
     const accent = this.sampleAccent(time, reducedMotion);
+    const heldBody =
+      this.accent?.kind === 'tick' && this.bodyAccent !== this.accent
+        ? this.sampleAccent(time, reducedMotion, this.bodyAccent)
+        : null;
+    if (heldBody?.active) {
+      const gain = heldBody.envelope * this.intensity * (reducedMotion ? 0.08 : 1);
+      applyDrumAccent(
+        output,
+        heldBody,
+        gain * (0.12 + Math.pow(heldBody.weight, 1.25) * 0.88),
+        this.features,
+        glyphOrders,
+      );
+    }
     if (accent.envelope > 0) {
       const gain = accent.envelope * this.intensity * (reducedMotion ? 0.08 : 1);
       if (accent.source === 'drum') {
@@ -897,10 +944,9 @@ export class MotionDirector {
         output.group.y += gain * 0.014;
       }
     }
-    if (this.accent?.carry && accent.ageSeconds < accent.peakSeconds)
-      addMotion(output, this.accent.carry, 1 - ease(accent.ageSeconds / accent.peakSeconds));
     output.accent = {
       ...accent,
+      heldBody: heldBody?.active ? { ...heldBody } : null,
       pose: { group: { ...output.group }, glyphs: output.glyphs.map((glyph) => ({ ...glyph })) },
     };
     return output;
@@ -929,6 +975,7 @@ export class MotionDirector {
       phraseStarts: this.phraseStarts,
       phrase: { ...sampled.phrase },
       accent: { ...sampled.accent },
+      drumPriority: { ...sampled.drumPriority },
       featureMap: {
         frequencyTrend: this.features.frequencyTrend,
         amplitudeTrend: this.features.amplitudeTrend,

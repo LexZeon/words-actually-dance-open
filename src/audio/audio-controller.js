@@ -1,6 +1,6 @@
 import { BeatDetector } from './beat-detector.js';
 import { MotionFeatures, EMPTY_MOTION_FEATURES } from './motion-features.js';
-import { DrumDetector, EMPTY_DRUM } from './drum-detector.js';
+import { DrumDetector, EMPTY_DRUM, ageDrumObservation } from './drum-detector.js';
 import { createDemoPcm } from './demo-music.js';
 import { createDisplayAudioAdapter, stopDisplayStream, displayAudioError } from './display-audio.js';
 import { prepareBufferPlayback, stopAudioNode, disconnectAudioNode } from './buffer-playback.js';
@@ -367,8 +367,17 @@ export class AudioController {
     const time = this.context.currentTime;
     // A high-refresh screen can render >250 FPS. Analysis uses audio time and
     // a bounded 90 Hz cadence; duplicate render frames reuse the snapshot.
-    if (this.sampleSnapshot && time >= this.lastSampleTime && time - this.lastSampleTime < 1 / 90)
-      return this.sampleSnapshot;
+    if (this.sampleSnapshot && time >= this.lastSampleTime && time - this.lastSampleTime < 1 / 90) {
+      if (!Number.isFinite(this.sampleSnapshot.drum.attackTime)) return this.sampleSnapshot;
+      const drum = ageDrumObservation(this.sampleSnapshot.drum, time);
+      if (drum.ageSeconds === this.sampleSnapshot.drum.ageSeconds) return this.sampleSnapshot;
+      return {
+        ...this.sampleSnapshot,
+        // Reused analysis keeps its event identity, but its audio-clock age
+        // still advances. Renderers compensate using their own current elapsed.
+        drum,
+      };
+    }
     this.lastSampleTime = time;
     this.analyser.getFloatFrequencyData(this.decibels);
     this.analyser.getFloatTimeDomainData(this.wave);

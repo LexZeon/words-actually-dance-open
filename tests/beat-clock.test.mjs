@@ -50,11 +50,44 @@ test('meaningful repeated observed evidence changes tempo progressively', () => 
   assert.ok(events.every((event) => event.source === 'internal'));
 });
 
-test('small stable tempo differences retain the same dance grid', () => {
+test('moderate cold-start evidence keeps the held grid for a small tempo difference', () => {
   const clock = new BeatClock();
-  run(clock, { bpm: 113, seconds: 8 });
+  run(clock, { bpm: 113, confidence: 0.5, seconds: 8 });
   assert.equal(clock.getState().bpm, 108);
   assert.equal(clock.getState().targetBpm, 108);
+});
+
+test('strong coherent cold-start onsets resolve the tempo and phase gap around the default', () => {
+  for (const bpm of [101, 104, 112, 113, 116]) {
+    const clock = new BeatClock();
+    const events = run(clock, { bpm, seconds: 12 });
+    const state = clock.getState();
+    assert.equal(state.targetBpm, bpm, 'cold-start target ' + bpm);
+    assert.ok(Math.abs(state.bpm - bpm) < 0.1);
+    assert.equal(state.tempoSource, 'audio');
+    assert.equal(state.phaseLockSource, 'observed-onsets');
+    assert.ok(events.every((event) => event.source === 'internal'));
+    for (let i = 1; i < events.length; i++)
+      assert.ok(
+        events[i].beatIndex * 4 + events[i].subdivisionIndex >
+          events[i - 1].beatIndex * 4 + events[i - 1].subdivisionIndex,
+      );
+  }
+});
+
+test('confident irregular cold-start attacks do not establish a nearby default tempo', () => {
+  const clock = new BeatClock();
+  let next = 0,
+    count = 0;
+  for (let frame = 0; frame < 12 * 120; frame++) {
+    const time = frame / 120;
+    const beat = time >= next;
+    if (beat) next += count++ % 2 ? 0.46 : 0.64;
+    clock.update(features(beat ? 1 : 0, { bpm: 113, confidence: 0.95 }), time);
+  }
+  assert.equal(clock.getState().targetBpm, 108);
+  assert.equal(clock.getState().bpm, 108);
+  assert.notEqual(clock.getState().phaseLockSource, 'observed-onsets');
 });
 
 test('an established tempo can follow a trustworthy smaller drift through the old tempo/phase dead band', () => {

@@ -639,12 +639,18 @@ test('a measured drum initiates a physical accent before BPM learning without ma
   assert.equal(director.beatCount, 0);
   assert.equal(director.accent.started, 1);
   const firstFrame = director.sample(1 + 1 / 60, { glyphCount: 4 });
+  const confirmedFrame = director.sample(1, { glyphCount: 4 });
   const peak = director.sample(1.024, { glyphCount: 4 });
   assert.ok(firstFrame.group.scaleX > 1.05, 'The first 60 Hz frame already shows a grounded drum response');
   assert.ok(peak.group.y > 0.05 && peak.group.scaleX > 1.15 && peak.group.scaleY < 0.9);
   assert.equal(peak.accent.source, 'drum');
   assert.equal(peak.accent.gridPhaseAtOnset, 0.63, 'Actual hits may arrive anywhere in the estimated cycle');
-  assert.equal(peak.accent.peakSeconds, 0.024);
+  assert.equal(peak.accent.peakSeconds, 0);
+  assert.ok(
+    confirmedFrame.group.scaleX > 1.15 && confirmedFrame.group.y > 0.05,
+    'The confirmation frame itself already carries the real impact',
+  );
+  assert.ok(confirmedFrame.accent.envelope >= firstFrame.accent.envelope);
   assert.equal(director.beatCount, 0);
   assert.deepEqual(director.sample(1.4, { glyphCount: 4 }).group, neutralMotionForTest(4).group);
 });
@@ -719,20 +725,147 @@ test('a grid beat samples the same real drum accent once and never puts it into 
   assert.equal(director.beatCount, 1);
 });
 
-test('nearby real drum hits morph from the current accent and settle without stacking old impacts', () => {
+test('a new body hit replaces the old impact immediately rather than adding another delayed rise', () => {
   const director = drumDirector();
   const old = director.sampleAccentMotion(1.07, { glyphCount: 4 });
   director.update(music({ beat: 0, drum: drumHit({ sequence: 2, kind: 'snap' }) }), 1.07, { glyphCount: 4 });
   const onset = director.sampleAccentMotion(1.07, { glyphCount: 4 });
-  assert.ok(
-    distance(old, onset) < 1e-12,
-    'The second hit starts from the visible pose, without a neutral snap',
-  );
+  assert.ok(old.group.y > 0 && onset.group.y < 0, 'The newly confirmed upward snap is already visible');
+  const isolatedOnset = drumDirector(drumHit({ kind: 'snap' })).sampleAccentMotion(1, { glyphCount: 4 });
+  assert.ok(distance(onset, isolatedOnset) < 1e-10, 'Old body hits cannot accumulate on a new body hit');
   const peak = director.sampleAccentMotion(1.094, { glyphCount: 4 });
   assert.ok(peak.group.y < 0, 'The new snap replaces, rather than accumulates with, the downward thump');
   const isolated = drumDirector(drumHit({ kind: 'snap' })).sampleAccentMotion(1.024, { glyphCount: 4 });
   assert.ok(distance(peak, isolated) < 1e-10);
   assert.ok(distance(director.sampleAccentMotion(1.5, { glyphCount: 4 }), neutralMotionForTest(4)) < 1e-12);
+});
+
+test('real drum priority reduces autonomous half-beat motion while keeping the same global two-beat direction', () => {
+  const make = (withDrum) => {
+    const director = new MotionDirector();
+    director.update(music({ beat: 1, beatIndex: 12, beatPhase: 0 }), 1, { glyphCount: 4 });
+    director.update(
+      music({
+        beat: 0,
+        beatIndex: 12,
+        beatPhase: 0.1,
+        drum: withDrum ? drumHit({ ageSeconds: 0.018 }) : { hit: false, sequence: 0 },
+      }),
+      1.1,
+      { glyphCount: 4 },
+    );
+    return director;
+  };
+  const quiet = make(false),
+    driven = make(true);
+  const options = { glyphCount: 4, beatPhase: 0.5, includeAccent: false, includePhrase: false };
+  const autonomous = quiet.sample(1.28, options),
+    backdrop = driven.sample(1.28, options);
+  assert.deepEqual(backdrop.cycle, autonomous.cycle);
+  assert.ok(backdrop.cycle.active && backdrop.cycle.direction === 'left');
+  const ratio = distance(backdrop, neutralMotionForTest(4)) / distance(autonomous, neutralMotionForTest(4));
+  assert.ok(ratio >= 0.1 && ratio <= 0.2, `Actual backdrop ratio ${ratio}`);
+  assert.equal(driven.beatCount, quiet.beatCount, 'No physical hit creates or rebases a grid beat');
+  assert.equal(driven.sample(2.7, options).drumPriority.active, false, 'No drum: ordinary motion returns');
+  assert.equal(driven.sample(2.7, options).drumPriority.gridGain, 1);
+});
+
+test('a light tick keeps its local character accent without truncating the preceding heavy body impact', () => {
+  const director = drumDirector(drumHit({ weight: 0.95 }));
+  const before = director.sampleAccentMotion(1.06, { glyphCount: 4 });
+  director.update(music({ beat: 0, drum: drumHit({ sequence: 2, kind: 'tick', weight: 0.15 }) }), 1.06, {
+    glyphCount: 4,
+  });
+  const after = director.sampleAccentMotion(1.06, { glyphCount: 4 });
+  assert.deepEqual(after.group, before.group, 'A hat cannot replace the still-visible kick body');
+  assert.equal(after.accent.sequence, 2);
+  assert.equal(after.accent.heldBody.sequence, 1);
+  assert.ok(distance(after, before) > 0.005, 'The new tick still changes actual glyphs');
+  assert.deepEqual(director.sampleAccentMotion(1.4, { glyphCount: 4 }).group, neutralMotionForTest(4).group);
+});
+
+test('four musical dimensions still continuously alter the same held paths while actual drums have visual priority', () => {
+  const sample = (variant) => {
+    const director = new MotionDirector();
+    director.update(music({ beat: 1, beatIndex: 12 }), 1, { glyphCount: 4 });
+    const selection = director.command.primary;
+    director.update(music({ ...variant, beat: 0, beatIndex: 12, drum: drumHit() }), 1.1, { glyphCount: 4 });
+    assert.equal(director.command.primary, selection);
+    return director.sample(1.12, { glyphCount: 4, beatPhase: variant.beatPhase ?? 0.38 });
+  };
+  for (const [low, high] of [
+    [
+      { frequencyHz: 120, frequencyTrend: -0.8 },
+      { frequencyHz: 8500, frequencyTrend: 0.8 },
+    ],
+    [
+      { amplitude: 0.005, amplitudeTrend: -0.8 },
+      { amplitude: 0.3, amplitudeTrend: 0.8 },
+    ],
+    [{ beatPhase: 0.15 }, { beatPhase: 0.7 }],
+    [
+      { brightness: 0.05, noisiness: 0.01 },
+      { brightness: 0.95, noisiness: 0.95 },
+    ],
+  ]) {
+    const a = sample(low),
+      b = sample(high);
+    assert.ok(a.drumPriority.active && b.drumPriority.active);
+    assert.ok(distance(a, b) > 0.01, 'Priority cannot replace live musical modulation with a static preset');
+  }
+});
+
+test('audio age maps onto render elapsed without an extra attack ramp or an audio-clock epoch jump', () => {
+  const director = drumDirector(
+    drumHit({ time: 8000, attackTime: 7999.98, confirmedAt: 8000, ageSeconds: 0.02 }),
+  );
+  assert.ok(Math.abs(director.accent.started - 0.98) < 1e-12);
+  const immediate = director.sampleAccentMotion(1, { glyphCount: 4 });
+  assert.ok(immediate.accent.envelope > 0.85 && immediate.group.scaleX > 1.15);
+  const negative = drumDirector(drumHit({ ageSeconds: -1 }));
+  assert.equal(negative.accent.started, 1, 'A malformed negative age cannot render a future event');
+  const invalid = drumDirector(drumHit({ ageSeconds: Infinity }));
+  assert.equal(invalid.accent.started, 1);
+});
+
+test('an empty production drum object cannot suppress a genuine observed melodic onset, while recent drums avoid double accents', () => {
+  const director = new MotionDirector();
+  const empty = { hit: false, sequence: 0, kind: null, weight: 0, confidence: 0 };
+  director.update(
+    music({ beat: 0, drum: empty, observedBeat: 1, observedConfidence: 0.8, observedStrength: 0.7 }),
+    1,
+  );
+  assert.equal(director.accent.source, 'observed');
+  assert.ok(director.sampleAccentMotion(1, { glyphCount: 1 }).group.scaleX > 1);
+  director.update(music({ beat: 0, drum: drumHit(), observedBeat: 0 }), 1.1);
+  const physical = director.accent;
+  director.update(
+    music({
+      beat: 0,
+      drum: { ...empty, sequence: 1 },
+      observedBeat: 1,
+      observedConfidence: 1,
+      observedStrength: 1,
+    }),
+    1.2,
+  );
+  assert.equal(director.accent, physical);
+  director.update(music({ beat: 0, drum: { ...empty, sequence: 1 }, observedBeat: 0 }), 2.5);
+  director.update(
+    music({
+      beat: 0,
+      drum: { ...empty, sequence: 1 },
+      observedBeat: 1,
+      observedConfidence: 0.8,
+      observedStrength: 0.7,
+    }),
+    2.6,
+  );
+  assert.equal(
+    director.accent.source,
+    'observed',
+    'True non-drum onsets resume after real drum priority expires',
+  );
 });
 
 test('manual pause freezes drum motion and consumes hits received while held instead of replaying on resume', () => {

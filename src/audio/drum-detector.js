@@ -12,9 +12,29 @@ export const EMPTY_DRUM = Object.freeze({
   kind: null,
   confidence: 0,
   time: null,
+  attackTime: null,
+  confirmedAt: null,
+  ageSeconds: 0,
   envelope: 0,
   evidence: Object.freeze({ flux: 0, rise: 0, contrast: 0, low: 0, mid: 0, high: 0 }),
 });
+
+// Keep enough causal attack evidence to classify the head, without turning a
+// 60 Hz frame's 16.67 ms observation into an extra 33.33 ms wait for 18 ms.
+const ATTACK_CONFIRM_SECONDS = 0.016;
+const MIN_ATTACK_INTERVAL_SECONDS = 0.07;
+const MAX_EVENT_AGE_SECONDS = 0.25;
+
+/** Audio-clock age, not a visual-clock timestamp or a device-latency estimate.
+ * attackTime is the first observed candidate, which may follow the physical
+ * onset. time stays the confirmation timestamp for existing consumers. */
+export function ageDrumObservation(observation, audioTime) {
+  const ageSeconds =
+    Number.isFinite(observation?.attackTime) && Number.isFinite(audioTime)
+      ? Math.max(0, Math.min(MAX_EVENT_AGE_SECONDS, audioTime - observation.attackTime))
+      : 0;
+  return Object.freeze({ ...(observation || EMPTY_DRUM), ageSeconds });
+}
 
 export class DrumDetector {
   constructor({ sampleRate = 48000, fftSize = 2048 } = {}) {
@@ -36,6 +56,7 @@ export class DrumDetector {
     this.fluxMean = [0, 0, 0];
     this.fluxDeviation = [0, 0, 0];
     this.lastHitTime = -Infinity;
+    this.lastAttackTime = -Infinity;
     this.lastBandHits = [-Infinity, -Infinity, -Infinity];
     this.levelPeak = 0;
     this.bandPeaks = [0, 0, 0];
@@ -98,6 +119,10 @@ export class DrumDetector {
         fluxes[band] > threshold &&
         strongRise &&
         time - this.lastHitTime >= 0.045 &&
+        // Earlier confirmation must not expose the same drum head's later
+        // spectral movement as another colour. Anchor this guard to the
+        // observed attack, preserving distinct 80 ms hits across bands.
+        time - this.lastAttackTime >= MIN_ATTACK_INTERVAL_SECONDS &&
         time - this.lastBandHits[band] >= 0.075
       )
         candidates.push({
@@ -140,7 +165,7 @@ export class DrumDetector {
       // A short attack window observes enough of the drum head to distinguish
       // low body from a leading click and to estimate its perceptual weight.
       // It is independent of any beat period or tempo confidence.
-      if (time - pending.start >= 0.018) {
+      if (time - pending.start >= ATTACK_CONFIRM_SECONDS) {
         this.pendingAttack = null;
         if (pending.evidence && audible) {
           const {
@@ -176,6 +201,7 @@ export class DrumDetector {
             // fall back to a tick. The short global guard also covers the
             // confirmed drum head to reject late noise within that same hit.
             this.lastHitTime = time;
+            this.lastAttackTime = pending.start;
             this.lastBandHits[band] = pending.start;
             this.levelPeak = Math.max(this.levelPeak, pending.peakRms);
             for (let index = 0; index < 3; index++)
@@ -188,6 +214,8 @@ export class DrumDetector {
               kind,
               confidence,
               time,
+              attackTime: pending.start,
+              confirmedAt: time,
               evidence: Object.freeze({
                 flux: unit(attackFluxes[selected.band]),
                 rise: attackRise,
@@ -206,12 +234,15 @@ export class DrumDetector {
       this.envelope = 0;
       this.lastEvent = null;
     }
-    this.lastResult = Object.freeze({
-      ...(this.lastEvent || EMPTY_DRUM),
-      sequence: this.sequence,
-      hit,
-      envelope: unit(this.envelope),
-    });
+    this.lastResult = ageDrumObservation(
+      {
+        ...(this.lastEvent || EMPTY_DRUM),
+        sequence: this.sequence,
+        hit,
+        envelope: unit(this.envelope),
+      },
+      time,
+    );
     return this.lastResult;
   }
 }

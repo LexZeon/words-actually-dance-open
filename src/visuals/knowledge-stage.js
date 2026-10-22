@@ -59,6 +59,7 @@ export class KnowledgeStage {
     el.dataset.presentation = 'scene';
     el.dataset.layout = 'manual';
     el.dataset.paused = 'false';
+    el.dataset.rhythmPriority = 'grid';
     const Resize = this.document.defaultView?.ResizeObserver;
     this.resizeFrame = null;
     if (Resize) {
@@ -80,6 +81,7 @@ export class KnowledgeStage {
 
   setScript(topic, { initialKeyword = '' } = {}) {
     this.drumResponse.clear();
+    this.el.dataset.rhythmPriority = 'grid';
     this.quarterTurn.clear();
     this.textFlow.clear();
     this.revealAfterTick = null;
@@ -137,8 +139,11 @@ export class KnowledgeStage {
 
   setFeatures(features = {}) {
     if (this.destroyed) return;
+    const sourceChanged = features.sourceGeneration !== this.musicFeatures.sourceGeneration;
     this.musicFeatures = features;
     this.drumResponse.update(features, { paused: this.paused });
+    if (this.drumResponse.getPriority() > 0) this.el.dataset.rhythmPriority = 'drum';
+    else if (sourceChanged) this.el.dataset.rhythmPriority = 'grid';
   }
 
   setPaused(value) {
@@ -240,6 +245,10 @@ export class KnowledgeStage {
       if (this.cursor === this.current.chars.length) this.completeAtBeat = event.beatIndex;
     }
     if (beat) {
+      // Re-enable ordinary decorative pulses only on the next shared beat,
+      // never midway through a beat when the real-onset priority expires.
+      if (this.drumResponse.getPriority(this.musicFeatures.time) === 0)
+        this.el.dataset.rhythmPriority = 'grid';
       this.pulseKeywords();
       if (this.effect === 'barrage') {
         const progress = this.cursor / Math.max(1, this.current.chars.length);
@@ -628,6 +637,14 @@ export class KnowledgeStage {
     const completed = this.current.keywords.filter((marker) => this.cursor >= marker.end);
     const visible = [...new Set(completed.flatMap((marker) => marker.els))];
     if (!visible.length) return;
+    if (this.el.dataset.rhythmPriority === 'drum') {
+      // Keep semantic highlighting; the actual onset response owns movement.
+      visible.forEach((group) => {
+        group.classList.add('active');
+        group.classList.remove('emphasis-current');
+      });
+      return;
+    }
     if (this.presentation === 'scene') {
       const featured = this.current.featuredKeyword || visible.at(-1);
       const marker = this.current.featuredMarker;

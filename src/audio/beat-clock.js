@@ -153,13 +153,11 @@ export class BeatClock {
     const difference = Math.abs(candidate - this.targetBpm);
     const meaningful = difference >= Math.max(6, this.targetBpm * 0.08);
     const confirmingHeldTempo = difference <= Math.max(2, this.targetBpm * 0.02);
-    // An already learned tempo can drift into the gap between the coarse 8%
-    // change threshold and the 3% PLL admission window. Strong repeated actual
-    // onsets can fine-tune that learned tempo without admitting an octave jump
-    // or relaxing the four-observation phase-coherence test. Cold-start small
-    // guesses and moderate/irregular evidence keep the held-grid behavior.
+    // Both a learned tempo and the default can lie between the coarse change
+    // threshold and PLL admission window. Four strong, coherent real onsets
+    // can resolve that gap. Otherwise a song near 108 BPM could remain on the
+    // free-running default forever. Moderate/irregular guesses still hold it.
     const trustedFineAdjustment =
-      this.hasAudioTempo &&
       coherentPhaseEvidence &&
       features.confidence >= 0.6 &&
       this.phaseObservations.every((entry) => entry.confidence >= 0.6) &&

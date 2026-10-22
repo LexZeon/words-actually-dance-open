@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DrumDetector } from '../src/audio/drum-detector.js';
+import { DrumDetector, ageDrumObservation } from '../src/audio/drum-detector.js';
 import { AudioController } from '../src/audio/audio-controller.js';
 import { BlackmanFft, pcmRhythm } from './helpers/pcm-rhythm.mjs';
+import { drumPcmFixture } from './helpers/drum-pcm-fixtures.mjs';
 
 function rhythmFrames(seconds = 2) {
   const fixture = pcmRhythm({ seconds, offset: 0.2, bpm: 120 });
@@ -57,6 +58,9 @@ test('repeated analysis time, silence, reset and discontinuities never replay an
   assert.equal(first.hit, false, 'a new source primes its current spectrum');
   assert.equal(first.sequence, event.sequence);
   assert.equal(first.envelope, 0);
+  assert.equal(first.attackTime, null);
+  assert.equal(first.confirmedAt, null);
+  assert.equal(first.ageSeconds, 0);
   for (let frame = 30; frame < 90; frame++) detector.process(fixture.frame(frame / 90));
   const beforeGap = detector.sequence;
   const gap = detector.process(fixture.frame(1.5));
@@ -73,6 +77,83 @@ test('repeated analysis time, silence, reset and discontinuities never replay an
   assert.equal(quiet.kind, null);
   assert.equal(quiet.weight, 0);
   assert.equal(quiet.envelope, 0);
+  assert.equal(quiet.attackTime, null);
+  assert.equal(quiet.confirmedAt, null);
+  assert.equal(quiet.ageSeconds, 0);
+});
+
+test('real PCM keeps candidate and confirmation times distinct without an extra 60 Hz frame of waiting', () => {
+  for (const phase of [0, 0.37]) {
+    for (const profile of ['alternating-weight', 'different-drum-bands']) {
+      const fixture = drumPcmFixture({ profile });
+      const detector = new DrumDetector(fixture);
+      const events = [];
+      for (let frame = 0; frame < fixture.seconds * 60; frame++) {
+        const input = fixture.frame((frame + phase) / 60);
+        const result = detector.process(input);
+        assert.ok(Number.isFinite(result.ageSeconds));
+        assert.ok(result.ageSeconds >= 0 && result.ageSeconds <= 0.25);
+        if (result.hit) events.push(result);
+      }
+      assert.equal(events.length, fixture.hits.length, profile);
+      events.forEach((event, index) => {
+        const label = fixture.hits[index];
+        const context = `${profile}, phase ${phase}, hit ${index}`;
+        assert.equal(event.time, event.confirmedAt, 'legacy time remains the confirmation clock');
+        assert.ok(event.attackTime >= label.time, context);
+        assert.ok(event.attackTime < event.confirmedAt, context);
+        const confirmation = event.confirmedAt - event.attackTime;
+        assert.ok(confirmation >= 0.016 && confirmation < 0.018, context);
+        assert.ok(event.confirmedAt - label.time < 0.045, context);
+        assert.equal(event.kind, label.kind, context);
+        assert.ok(Math.abs(event.ageSeconds - confirmation) < 1e-9, context);
+      });
+      const heavy = events.filter((_, index) => fixture.hits[index].role === 'heavy');
+      const light = events.filter((_, index) => fixture.hits[index].role === 'light');
+      if (heavy.length) {
+        const mean = (values) => values.reduce((sum, event) => sum + event.weight, 0) / values.length;
+        assert.ok(mean(heavy) > mean(light) * 1.12, profile);
+      }
+    }
+  }
+});
+
+test('event age is bounded and cannot change the confirmed identity or invent an earlier clock', () => {
+  const fixture = rhythmFrames();
+  const detector = new DrumDetector(fixture);
+  let event;
+  for (let frame = 0; frame < 90 && !event; frame++) {
+    const result = detector.process(fixture.frame(frame / 90));
+    if (result.hit) event = result;
+  }
+  assert.ok(event);
+  const aged = ageDrumObservation(event, event.confirmedAt + 0.005);
+  assert.equal(aged.sequence, event.sequence);
+  assert.equal(aged.attackTime, event.attackTime);
+  assert.equal(aged.confirmedAt, event.confirmedAt);
+  assert.equal(aged.time, event.time);
+  assert.ok(Math.abs(aged.ageSeconds - event.ageSeconds - 0.005) < 1e-9);
+  assert.equal(ageDrumObservation(event, event.attackTime - 1).ageSeconds, 0);
+  assert.equal(ageDrumObservation(event, Infinity).ageSeconds, 0);
+  assert.equal(ageDrumObservation(event, event.attackTime + 30).ageSeconds, 0.25);
+  assert.equal(event.ageSeconds, event.confirmedAt - event.attackTime, 'cached source is immutable');
+});
+
+test('quicker confirmation does not reclassify a polyphonic drum tail as a second attack at 59.94 Hz', () => {
+  for (const phase of [0, 0.37]) {
+    const fixture = drumPcmFixture({ profile: 'polyphonic-syncopation' });
+    const detector = new DrumDetector(fixture);
+    const events = [];
+    for (let frame = 0; frame < fixture.seconds * 59.94; frame++) {
+      const result = detector.process(fixture.frame((frame + phase) / 59.94));
+      if (result.hit) events.push(result);
+    }
+    assert.equal(events.length, fixture.hits.length, `phase ${phase}`);
+    events.forEach((event, index) => {
+      const delay = event.confirmedAt - fixture.hits[index].time;
+      assert.ok(delay >= 0 && delay < 0.075, `phase ${phase}, hit ${index}`);
+    });
+  }
 });
 
 test('steady tonal PCM and stationary noise do not become ongoing percussion', () => {
@@ -166,6 +247,12 @@ test('audio controller uses an unsmoothed attack analyser and owns its complete 
       if (value.drum.hit) {
         event = value.drum;
         assert.equal(audio.sample().drum.sequence, event.sequence, 'cached frame retains event identity');
+        audio.context.currentTime += 0.005;
+        const cached = audio.sample().drum;
+        assert.equal(cached.sequence, event.sequence);
+        assert.equal(cached.attackTime, event.attackTime);
+        assert.equal(cached.confirmedAt, event.confirmedAt);
+        assert.ok(Math.abs(cached.ageSeconds - event.ageSeconds - 0.005) < 1e-9);
         break;
       }
     }
@@ -173,6 +260,9 @@ test('audio controller uses an unsmoothed attack analyser and owns its complete 
     await audio.setPaused(true);
     assert.equal(audio.sample().drum.hit, false);
     assert.equal(audio.sample().drum.envelope, 0);
+    assert.equal(audio.sample().drum.attackTime, null);
+    assert.equal(audio.sample().drum.confirmedAt, null);
+    assert.equal(audio.sample().drum.ageSeconds, 0);
     assert.equal(audio.drumDetector.envelope, 0);
     assert.equal(audio.sampleSnapshot, null);
     await audio.destroy();

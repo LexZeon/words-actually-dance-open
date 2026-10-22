@@ -449,6 +449,22 @@ summary svg {
 .knowledge-line .keyword.active .char.read {
   color: #080808;
 }
+/* Real measured attacks own emphasis while reading stays on the shared grid.
+   Individual scale from KnowledgeDrumResponse composes outside this transform. */
+.knowledge-stage[data-rhythm-priority='drum'] .current .keyword.active,
+.knowledge-stage[data-rhythm-priority='drum'] .current .keyword.emphasis-current {
+  animation: none !important;
+  transform: none !important;
+  transition:
+    color 0.18s,
+    background 0.18s;
+}
+.knowledge-stage[data-rhythm-priority='drum'][data-layout='steps'] .current .keyword.active {
+  transform: translateY(var(--step-offset, 0px)) !important;
+}
+.knowledge-stage[data-rhythm-priority='drum'][data-layout='diagonal'] .current .keyword.active {
+  transform: translateY(var(--diagonal-offset, 0px)) rotate(-2deg) !important;
+}
 .knowledge-stage[data-effect='marker'] .keyword.active {
   color: #fff;
   background: none;

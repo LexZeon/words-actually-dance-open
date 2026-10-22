@@ -1228,6 +1228,76 @@ test('observed drum frames change the actual reading element without advancing t
   assert.equal(restoredTrack.style.scale, '');
 });
 
+test('real drum emphasis outranks internal keyword pulses without changing reading ticks or losing semantic roles', () => {
+  const stage = new KnowledgeStage(host());
+  stage.setRate(4);
+  stage.setScript({
+    lines: [
+      {
+        text: '知识需要慢慢理解并回想，真实声音的重点清楚而阅读速度保持舒服。',
+        keyword: '知识',
+        holdBeats: 32,
+      },
+    ],
+  });
+  tick(stage, 0, 0);
+  tick(stage, 0, 1);
+  const keyword = stage.current.featuredKeyword;
+  assert.ok(keyword);
+  const before = stage.cursor;
+  const measured = {
+    time: 1,
+    sourceGeneration: 1,
+    signalValid: 1,
+    audioSilent: 0,
+    drum: {
+      hit: true,
+      sequence: 1,
+      kind: 'thump',
+      weight: 0.9,
+      strength: 0.8,
+      confidence: 0.8,
+      ageSeconds: 0.018,
+    },
+  };
+  stage.setFeatures(measured);
+  stage.frame({ time: 1, beatIndex: 0, phase: 0.8 });
+  assert.equal(stage.cursor, before, 'A physical onset cannot independently advance the reading clock');
+  assert.equal(stage.el.dataset.rhythmPriority, 'drum');
+  assert.ok(
+    Number(keyword.style.scale) > 1.1,
+    'The real keyword is visibly emphasized in the confirmation frame',
+  );
+  tick(stage, 1, 0, measured);
+  assert.equal(stage.cursor, before + 1, 'Existing shared reading slots remain intact');
+  assert.ok(keyword.classList.contains('active'), 'The semantic highlight stays present');
+  assert.equal(
+    keyword.classList.contains('emphasis-current'),
+    false,
+    'A synthetic beat cannot restart the bigger emphasis',
+  );
+  stage.setFeatures({ ...measured, time: 2.5, drum: { ...measured.drum, hit: false } });
+  assert.equal(
+    stage.el.dataset.rhythmPriority,
+    'drum',
+    'Decorative grid emphasis cannot restart between beats',
+  );
+  tick(stage, 1, 2);
+  assert.equal(stage.el.dataset.rhythmPriority, 'drum');
+  tick(stage, 2, 0);
+  assert.equal(stage.el.dataset.rhythmPriority, 'grid');
+  assert.ok(
+    keyword.classList.contains('emphasis-current'),
+    'Ordinary rhythmic emphasis resumes on a shared beat',
+  );
+  stage.setFeatures({ ...measured, time: 3, sourceGeneration: 2, drum: { ...measured.drum, hit: false } });
+  assert.equal(
+    stage.drumResponse.getPriority(),
+    0,
+    'Source changes cannot inherit the former drum authority',
+  );
+});
+
 test('same shared BPM gets denser character slots from measured delivery with a hard readable-speed budget', () => {
   for (const [bpm, drive, baseRate, expected] of [
     [120, 0.366, 2, 2],
