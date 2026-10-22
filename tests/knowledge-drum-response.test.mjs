@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { KnowledgeDrumResponse } from '../src/visuals/knowledge-drum-response.js';
 
 const hit = (time, sequence = 1, kind = 'thump', weight = 0.8, extra = {}) => ({
@@ -139,6 +140,260 @@ test('pop and flash accents change their visible spotlight while normal text cha
     response.clear();
     assert.equal(visible.style.scale, '');
   }
+});
+
+test('pure ticks in pop and flash scale the actually visible fragment instead of a hidden keyword wrapper', () => {
+  for (const effect of ['pop', 'flash']) {
+    const response = new KnowledgeDrumResponse(),
+      { current, host, track, spotlight } = surface();
+    track.style.opacity = '0'; // The real effect CSS hides this entire reading tree.
+    const hiddenKeyword = { style: { scale: '1.09' } };
+    current.featuredMarker = { els: [hiddenKeyword] };
+    spotlight.textContent = '节拍';
+    response.update(hit(1, 1, 'tick', 0.8));
+    response.frame(current, host, 1, effect);
+    const [x, y] = spotlight.style.scale.split(' ').map(Number);
+    assert.ok(x > 1.005 && x <= 1.018, 'A pure tick visibly changes the displayed fragment width');
+    close(x, y);
+    assert.equal(spotlight.style.translate, '0px 0.0000px', 'A hat cannot move a whole sentence');
+    assert.equal(spotlight.style.filter, 'brightness(1.00000)');
+    assert.equal(hiddenKeyword.style.scale, '1.09', 'A hidden keyword must not count as the focus target');
+    assert.equal(track.style.scale, '');
+    assert.deepEqual(
+      response.focus.map(({ node }) => node),
+      [spotlight],
+    );
+    assert.equal(response.getState().presentation.target, 'spotlight');
+    close(response.getState().presentation.scaleX, response.pose.focusScale);
+    response.clear();
+    assert.equal(spotlight.style.scale, '');
+    assert.equal(hiddenKeyword.style.scale, '1.09');
+  }
+});
+
+test('spotlight body compression and local focus compose once, and changing modes restores both real targets', () => {
+  const response = new KnowledgeDrumResponse(),
+    { current, host, track, spotlight } = surface();
+  const keyword = { style: { scale: '1.03' } };
+  current.featuredMarker = { els: [keyword] };
+  Object.assign(spotlight.style, { scale: '1.04 1.02', filter: 'blur(1px)', translate: '2px 3px' });
+  const saved = { ...spotlight.style };
+  response.update(hit(1, 1, 'thump', 0.9));
+  response.frame(current, host, 1, 'pop');
+  const actual = spotlight.style.scale.split(' ').map(Number);
+  const pose = response.getState().pose;
+  assert.ok(Math.abs(actual[0] - pose.focusScale) < 0.00001);
+  assert.ok(Math.abs(actual[1] - pose.focusScale * pose.scaleY) < 0.00001);
+  assert.ok(actual[1] < actual[0], 'The focus write cannot overwrite the grounded compression');
+  assert.equal(spotlight.style.transform, saved.transform, 'Existing CSS transforms remain independent');
+  assert.equal(keyword.style.scale, '1.03');
+  response.frame(current, host, 1.02, 'typewriter');
+  assert.deepEqual(spotlight.style, saved);
+  assert.equal(response.getState().presentation.target, 'reading-track');
+  assert.ok(Number(keyword.style.scale) > 1.03);
+  assert.equal(
+    Number(track.style.scale.split(' ')[0]),
+    1,
+    'Normal reading keeps local and track scale separate',
+  );
+  response.frame(current, host, 1.04, 'flash');
+  assert.equal(keyword.style.scale, '1.03', 'Returning to spotlight restores the retired keyword style');
+  assert.equal(track.style.scale, '');
+  response.clear();
+  assert.deepEqual(spotlight.style, saved);
+  assert.equal(response.getState().presentation, null);
+});
+
+test('visible spotlight emphasis freezes on pause, reduces motion, and retires on source and line replacement', () => {
+  const make = (reducedMotion) => {
+    const s = surface({ reducedMotion }),
+      response = new KnowledgeDrumResponse();
+    response.update(hit(1, 1, 'snap', 0.9));
+    response.frame(s.current, s.host, 1, 'flash');
+    return { ...s, response };
+  };
+  const normal = make(false),
+    reduced = make(true);
+  const scale = (s) => Number(s.spotlight.style.scale.split(' ')[0]) - 1;
+  assert.ok(scale(reduced) > 0 && scale(reduced) < scale(normal) * 0.15);
+  const { response, current, host, spotlight } = normal;
+  const frozen = { ...spotlight.style };
+  response.update(hit(5, 2, 'thump'), { paused: true });
+  response.frame(current, host, 5, 'flash');
+  assert.deepEqual(spotlight.style, frozen);
+  response.update(hit(6, 2, 'thump'));
+  response.frame(current, host, 6, 'flash');
+  assert.deepEqual(spotlight.style, frozen, 'A paused incoming hit cannot replay on resume');
+  const next = surface();
+  response.frame(next.current, next.host, 6.01, 'flash');
+  assert.equal(spotlight.style.scale, '', 'The retired line retains no spotlight scale');
+  response.update(hit(6.02, 2, 'thump', 0.8, { sourceGeneration: 2, drum: { hit: false, sequence: 2 } }));
+  response.frame(next.current, next.host, 6.02, 'flash');
+  assert.deepEqual(next.spotlight.style.scale.split(' ').map(Number), [1, 1]);
+  response.clear();
+  assert.equal(next.spotlight.style.scale, '');
+});
+
+test('spotlight growth respects measured viewport room and recalculates when its visible typed fragment changes', () => {
+  const response = new KnowledgeDrumResponse();
+  const { current, host, spotlight } = surface();
+  let width = 50;
+  Object.defineProperty(spotlight, 'offsetWidth', { get: () => width });
+  spotlight.offsetHeight = 30;
+  spotlight.getBoundingClientRect = () => ({
+    left: 100 - width / 2,
+    right: 100 + width / 2,
+    top: 50,
+    bottom: 80,
+    width,
+    height: 30,
+  });
+  host.getBoundingClientRect = () => ({ left: 0, right: 200, top: 0, bottom: 140 });
+  spotlight.textContent = '短词';
+  response.update(hit(1, 1, 'thump', 1));
+  response.frame(current, host, 1, 'pop');
+  assert.ok(Number(spotlight.style.scale.split(' ')[0]) > 1.1);
+  width = 180;
+  spotlight.textContent = '同一节点里的长一些的片段';
+  response.frame(current, host, 1.01, 'pop');
+  const presentation = response.getState().presentation;
+  assert.equal(
+    presentation.focusScale,
+    1,
+    'Existing entrance peak already consumes the narrow horizontal budget',
+  );
+  assert.equal(Number(spotlight.style.scale.split(' ')[0]), 1);
+  assert.ok(
+    Number(spotlight.style.scale.split(' ')[1]) < 1,
+    'Body compression remains independent of the focus fit',
+  );
+});
+
+test('flash composes its original animated blur with real brightness instead of letting a keyframe mask the drum', async () => {
+  const css = await readFile(new URL('../src/visuals/extra-effects.css', import.meta.url), 'utf8');
+  const flash = css.slice(
+    css.indexOf('@keyframes spotlight-flash'),
+    css.indexOf('@keyframes knowledge-wave'),
+  );
+  assert.match(flash, /filter:\s*blur\(2px\)\s+brightness\(var\(--wad-drum-brightness,\s*1\)\)/);
+  assert.match(flash, /filter:\s*blur\(0\)\s+brightness\(var\(--wad-drum-brightness,\s*1\)\)/);
+  const response = new KnowledgeDrumResponse(),
+    { current, host, spotlight } = surface();
+  response.update(hit(1, 1, 'thump', 0.9));
+  response.frame(current, host, 1, 'flash');
+  const value = Number(spotlight.style['--wad-drum-brightness']);
+  assert.ok(value > 1.2 && Math.abs(value - response.pose.brightness) < 0.00001);
+  response.update(hit(1.1, 1, 'thump', 0.9, { drum: { ...hit(1).drum, hit: false } }));
+  response.frame(current, host, 1.1, 'flash');
+  assert.ok(Number(spotlight.style['--wad-drum-brightness']) < value);
+  response.clear();
+  assert.equal(
+    spotlight.style['--wad-drum-brightness'],
+    undefined,
+    'An originally absent custom property is removed',
+  );
+});
+
+test('flash restores the previous variable value and priority through same-node mode changes, line replacement and clear', () => {
+  const response = new KnowledgeDrumResponse(),
+    first = surface(),
+    next = surface();
+  const bindProperties = (style) => {
+    const priorities = new Map();
+    style.getPropertyValue = function (name) {
+      return this[name] || '';
+    };
+    style.getPropertyPriority = (name) => priorities.get(name) || '';
+    style.setProperty = function (name, value, priority = '') {
+      this[name] = value;
+      priorities.set(name, priority);
+    };
+    style.removeProperty = function (name) {
+      const old = this[name];
+      delete this[name];
+      priorities.delete(name);
+      return old;
+    };
+  };
+  bindProperties(first.spotlight.style);
+  bindProperties(next.spotlight.style);
+  first.spotlight.style.setProperty('--wad-drum-brightness', '0.83', 'important');
+  next.spotlight.style.setProperty('--wad-drum-brightness', '0.91');
+  response.update(hit(1));
+  response.frame(first.current, first.host, 1, 'flash');
+  assert.ok(Number(first.spotlight.style.getPropertyValue('--wad-drum-brightness')) > 1);
+  assert.equal(first.spotlight.style.getPropertyPriority('--wad-drum-brightness'), '');
+  response.frame(first.current, first.host, 1.01, 'pop');
+  assert.equal(first.spotlight.style.getPropertyValue('--wad-drum-brightness'), '0.83');
+  assert.equal(first.spotlight.style.getPropertyPriority('--wad-drum-brightness'), 'important');
+  response.frame(first.current, first.host, 1.02, 'flash');
+  response.frame(next.current, next.host, 1.03, 'flash');
+  assert.equal(first.spotlight.style.getPropertyValue('--wad-drum-brightness'), '0.83');
+  assert.equal(first.spotlight.style.getPropertyPriority('--wad-drum-brightness'), 'important');
+  response.clear();
+  assert.equal(next.spotlight.style.getPropertyValue('--wad-drum-brightness'), '0.91');
+  assert.equal(next.spotlight.style.getPropertyPriority('--wad-drum-brightness'), '');
+});
+
+test('flash brightness freezes and resumes without replaying paused hits, while a pure tick stays brightness-neutral', () => {
+  const response = new KnowledgeDrumResponse(),
+    { current, host, spotlight } = surface();
+  response.update(hit(1));
+  response.frame(current, host, 1, 'flash');
+  const initial = spotlight.style['--wad-drum-brightness'];
+  response.update(hit(4, 2, 'snap'), { paused: true });
+  response.frame(current, host, 4, 'flash');
+  assert.equal(spotlight.style['--wad-drum-brightness'], initial);
+  response.update(hit(5, 2, 'snap'));
+  response.frame(current, host, 5, 'flash');
+  assert.equal(spotlight.style['--wad-drum-brightness'], initial);
+  response.update(hit(6, 3, 'tick'));
+  response.frame(current, host, 6, 'flash');
+  assert.equal(spotlight.style['--wad-drum-brightness'], '1.00000');
+  assert.equal(spotlight.style.translate, '0px 0.0000px');
+  response.clear();
+});
+
+test('automatic scene zoom preserves its own blur while composing drum brightness and restoring the same track on exit', async () => {
+  const css = await readFile(new URL('../src/visuals/extra-effects.css', import.meta.url), 'utf8');
+  const zoom = css.slice(css.indexOf('@keyframes scene-zoom'), css.indexOf('@keyframes scene-split'));
+  assert.match(zoom, /filter:\s*blur\(3px\)\s+brightness\(var\(--wad-drum-brightness,\s*1\)\)/);
+  assert.match(zoom, /filter:\s*blur\(0\)\s+brightness\(var\(--wad-drum-brightness,\s*1\)\)/);
+  const response = new KnowledgeDrumResponse(),
+    { current, host, track, spotlight } = surface();
+  host.dataset = { presentation: 'scene', entrance: 'zoom' };
+  track.style['--wad-drum-brightness'] = '0.87';
+  response.update(hit(1, 1, 'snap', 0.9));
+  response.frame(current, host, 1, 'stack');
+  assert.equal(response.getState().presentation.target, 'reading-track');
+  assert.ok(Number(track.style['--wad-drum-brightness']) > 1.2);
+  assert.equal(
+    spotlight.style['--wad-drum-brightness'],
+    undefined,
+    'A hidden spotlight cannot satisfy scene emphasis',
+  );
+  assert.ok(Math.abs(Number(track.style['--wad-drum-brightness']) - response.pose.brightness) < 0.00001);
+  host.dataset.entrance = 'lift';
+  response.frame(current, host, 1.01, 'stack');
+  assert.equal(
+    track.style['--wad-drum-brightness'],
+    '0.87',
+    'The same track restores its variable when the conflicting animation leaves',
+  );
+  assert.match(
+    track.style.filter,
+    /^brightness\(/,
+    'Other entrances keep the existing inline brightness path',
+  );
+  host.dataset.entrance = 'zoom';
+  response.frame(current, host, 1.02, 'stack');
+  const next = surface();
+  next.host.dataset = { presentation: 'scene', entrance: 'zoom' };
+  response.frame(next.current, next.host, 1.03, 'stack');
+  assert.equal(track.style['--wad-drum-brightness'], '0.87');
+  assert.ok(Number(next.track.style['--wad-drum-brightness']) > 1);
+  response.clear();
+  assert.equal(next.track.style['--wad-drum-brightness'], undefined);
 });
 
 test('available viewport space limits movement and reduced motion keeps a smaller visible accent', () => {

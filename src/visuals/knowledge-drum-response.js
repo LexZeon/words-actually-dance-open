@@ -2,6 +2,7 @@ import { onsetAgeSeconds, onsetEnvelope, onsetPriority } from './onset-priority.
 
 const clamp = (value, low = 0, high = 1) => Math.min(high, Math.max(low, value));
 const neutral = () => ({ y: 0, scaleY: 1, focusScale: 1, brightness: 1, envelope: 0, kind: null, weight: 0 });
+const DRUM_BRIGHTNESS = '--wad-drum-brightness';
 
 /** Finite reading accents sampled by the shared coordinator, without a timer.
  * Knowledge cursor/line progression still belongs exclusively to grid ticks.
@@ -18,6 +19,10 @@ export class KnowledgeDrumResponse {
     this.track = null;
     this.previousStyle = null;
     this.focus = [];
+    this.presentation = null;
+    this.spotlightText = null;
+    this.spotlightFocusLimit = 1.13;
+    this.animatedBrightness = null;
     this.pose = neutral();
     this.travel = 0;
   }
@@ -114,7 +119,8 @@ export class KnowledgeDrumResponse {
   }
 
   frame(current, host, time = this.lastTime, effect = '') {
-    const track = ['pop', 'flash'].includes(effect) ? current?.spotlight : current?.track;
+    const spotlight = ['pop', 'flash'].includes(effect);
+    const track = spotlight ? current?.spotlight : current?.track;
     if (track !== this.track) {
       this.restore();
       this.track = track || null;
@@ -127,25 +133,57 @@ export class KnowledgeDrumResponse {
         this.measure(host);
       }
     }
+    // The spotlight reuses one element as the typed fragment changes. Reserve
+    // its real layout size again only on a text/track/layout change, not per frame.
+    if (spotlight && track && this.spotlightText !== track.textContent) {
+      this.spotlightText = track.textContent;
+      this.measure(host);
+    }
     const reducedMotion = Boolean(
       host.ownerDocument?.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
     );
     this.pose = this.sample(time, { reducedMotion });
     this.pose.y = clamp(this.pose.y, -this.travel, this.travel);
-    const focus = current?.featuredMarker?.els || (current?.featuredKeyword ? [current.featuredKeyword] : []);
+    // pop/flash make the reading track invisible. Its marker wrappers cannot
+    // count as a visible emphasis target; the actual displayed fragment owns it.
+    const focus = spotlight
+      ? track
+        ? [track]
+        : []
+      : current?.featuredMarker?.els || (current?.featuredKeyword ? [current.featuredKeyword] : []);
     if (focus.length !== this.focus.length || focus.some((node, index) => node !== this.focus[index].node)) {
       this.restoreFocus();
       this.focus = focus
         .filter((node) => node?.style)
         .map((node) => ({ node, scale: node.style.scale || '' }));
     }
-    for (const { node } of this.focus) node.style.scale = String(this.pose.focusScale);
+    for (const { node } of this.focus) if (!spotlight) node.style.scale = String(this.pose.focusScale);
     if (!track) return;
+    const focusScale = spotlight
+      ? Math.min(this.pose.focusScale, this.spotlightFocusLimit)
+      : this.pose.focusScale;
+    const scaleX = spotlight ? focusScale : 1;
+    const scaleY = this.pose.scaleY * (spotlight ? focusScale : 1);
+    const animatedFilter =
+      effect === 'flash' ||
+      (!spotlight && host.dataset?.presentation === 'scene' && host.dataset?.entrance === 'zoom');
+    if (animatedFilter) {
+      if (!this.animatedBrightness)
+        this.animatedBrightness = {
+          node: track,
+          value: track.style.getPropertyValue?.(DRUM_BRIGHTNESS) ?? track.style[DRUM_BRIGHTNESS] ?? '',
+          priority: track.style.getPropertyPriority?.(DRUM_BRIGHTNESS) || '',
+        };
+      // Animation filter declarations outrank a normal inline filter. Feed
+      // that same finite brightness into the original animated blur chain.
+      this.setAnimatedBrightness(track, this.pose.brightness.toFixed(5));
+    } else this.restoreAnimatedBrightness();
     // Individual transforms compose with the existing effect; compression
-    // cannot expand the line or change keyword-to-body spacing.
+    // remains on the sentence, while spotlight focus is composed exactly once.
     track.style.translate = `0px ${this.pose.y.toFixed(4)}px`;
-    track.style.scale = `1 ${this.pose.scaleY.toFixed(5)}`;
+    track.style.scale = `${scaleX.toFixed(5)} ${scaleY.toFixed(5)}`;
     track.style.filter = `brightness(${this.pose.brightness.toFixed(5)})`;
+    this.presentation = { target: spotlight ? 'spotlight' : 'reading-track', focusScale, scaleX, scaleY };
   }
 
   measure(host) {
@@ -153,13 +191,43 @@ export class KnowledgeDrumResponse {
     const stage = host?.getBoundingClientRect?.();
     this.travel =
       box && stage ? clamp(Math.min(box.top - stage.top, stage.bottom - box.bottom) - 4, 0, 6) : 4;
+    this.spotlightFocusLimit = 1.13;
+    if (box && stage) {
+      const width = this.track.offsetWidth || box.width || box.right - box.left;
+      const height = this.track.offsetHeight || box.height || box.bottom - box.top;
+      const centerX = (box.left + box.right) / 2;
+      const centerY = (box.top + box.bottom) / 2;
+      // Both existing spotlight entrance keyframes peak at scale(1.08).
+      // Do not add focus growth where its reserved viewport has no room.
+      const x = ((Math.min(centerX - stage.left, stage.right - centerX) - 4) * 2) / (width * 1.08);
+      const y = ((Math.min(centerY - stage.top, stage.bottom - centerY) - 4) * 2) / (height * 1.08);
+      const limits = [x, y].filter(Number.isFinite);
+      if (limits.length) this.spotlightFocusLimit = clamp(Math.min(...limits), 1, 1.13);
+    }
   }
 
   restore() {
     if (this.track && this.previousStyle) Object.assign(this.track.style, this.previousStyle);
+    this.restoreAnimatedBrightness();
     this.restoreFocus();
     this.track = null;
     this.previousStyle = null;
+    this.presentation = null;
+    this.spotlightText = null;
+  }
+
+  setAnimatedBrightness(node, value, priority = '') {
+    if (node.style.setProperty) node.style.setProperty(DRUM_BRIGHTNESS, value, priority);
+    else node.style[DRUM_BRIGHTNESS] = value;
+  }
+
+  restoreAnimatedBrightness() {
+    const saved = this.animatedBrightness;
+    if (!saved) return;
+    if (saved.value) this.setAnimatedBrightness(saved.node, saved.value, saved.priority);
+    else if (saved.node.style.removeProperty) saved.node.style.removeProperty(DRUM_BRIGHTNESS);
+    else delete saved.node.style[DRUM_BRIGHTNESS];
+    this.animatedBrightness = null;
   }
 
   restoreFocus() {
@@ -182,6 +250,7 @@ export class KnowledgeDrumResponse {
       active: this.pose.envelope > 0,
       priority: this.getPriority(),
       pose: { ...this.pose },
+      presentation: this.presentation ? { ...this.presentation } : null,
       maxTravelPx: this.travel,
     };
   }

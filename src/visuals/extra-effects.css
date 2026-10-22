@@ -279,13 +279,13 @@
 @keyframes spotlight-flash {
   0% {
     opacity: 0.3;
-    filter: blur(2px);
+    filter: blur(2px) brightness(var(--wad-drum-brightness, 1));
     transform: translateX(-50%) scale(1.08);
   }
   35%,
   100% {
     opacity: 1;
-    filter: blur(0);
+    filter: blur(0) brightness(var(--wad-drum-brightness, 1));
     transform: translateX(-50%) scale(1);
   }
 }
@@ -533,12 +533,12 @@
   from {
     opacity: 0.1;
     transform: scale(0.77) translateY(10px);
-    filter: blur(3px);
+    filter: blur(3px) brightness(var(--wad-drum-brightness, 1));
   }
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
-    filter: blur(0);
+    filter: blur(0) brightness(var(--wad-drum-brightness, 1));
   }
 }
 @keyframes scene-split {

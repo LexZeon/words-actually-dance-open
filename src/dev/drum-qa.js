@@ -29,6 +29,185 @@ const amplitude = (pose) =>
     Math.abs((pose?.scaleY ?? 1) - 1) * 100,
     Math.abs((pose?.brightness ?? 1) - 1) * 20,
   );
+
+const scalePair = (value) => {
+  const parts = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .map(Number);
+  return parts.length >= 1 && parts.every(Number.isFinite) ? [parts[0], parts[1] ?? parts[0]] : [NaN, NaN];
+};
+const close = (actual, expected, tolerance = 0.00002) =>
+  Number.isFinite(actual) && Number.isFinite(expected) && Math.abs(actual - expected) <= tolerance;
+const filterBrightness = (value) => {
+  const match = String(value || '').match(/^brightness\(([\d.e+-]+)\)$/u);
+  return match ? Number(match[1]) : NaN;
+};
+const computedFilter = (style, maximumBlur = 0, animationName = '') => {
+  const value = String(style.filter || '');
+  if (maximumBlur > 0) {
+    const composed = value.match(/^blur\(([\d.e+-]+)(?:px)?\) brightness\(([\d.e+-]+)\)$/u);
+    if (composed) {
+      const blur = Number(composed[1]),
+        brightness = Number(composed[2]);
+      return {
+        blur,
+        brightness,
+        valid: blur >= 0 && blur <= maximumBlur + 0.00002 && Number.isFinite(brightness),
+      };
+    }
+    // Without the finite entrance animation the inline brightness is the
+    // legitimate chain. An active entrance must retain its bounded blur too.
+    if (
+      String(style.animationName || '')
+        .split(/\s*,\s*/u)
+        .includes(animationName)
+    )
+      return { blur: NaN, brightness: NaN, valid: false };
+  }
+  const brightness = filterBrightness(value);
+  return { blur: 0, brightness, valid: Number.isFinite(brightness) };
+};
+
+function visibleTextElement(node, host) {
+  if (!node?.isConnected || !host?.contains(node) || !String(node.textContent || '').trim()) return false;
+  const view = node.ownerDocument?.defaultView;
+  if (typeof view?.getComputedStyle !== 'function') return false;
+  let opacity = 1,
+    reachedHost = false;
+  for (let ancestor = node; ancestor; ancestor = ancestor.parentElement) {
+    const style = view.getComputedStyle(ancestor);
+    opacity *= Number(style.opacity);
+    if (
+      style.display === 'none' ||
+      ['hidden', 'collapse'].includes(style.visibility) ||
+      style.contentVisibility === 'hidden' ||
+      !(opacity > 0.001)
+    )
+      return false;
+    if (ancestor === host) {
+      reachedHost = true;
+      break;
+    }
+  }
+  const box = rectangle(node),
+    bounds = rectangle(host);
+  return Boolean(
+    reachedHost &&
+    box?.width > 0 &&
+    box?.height > 0 &&
+    bounds &&
+    box.right > bounds.left &&
+    box.left < bounds.right &&
+    box.bottom > bounds.top &&
+    box.top < bounds.bottom,
+  );
+}
+
+function visibleGlyphCount(node, host) {
+  const glyphs = [...node.querySelectorAll('.char')];
+  return glyphs.length
+    ? glyphs.filter((glyph) => glyph.classList.contains('read') && visibleTextElement(glyph, host)).length
+    : Number(visibleTextElement(node, host));
+}
+
+/** Inspect actual post-frame CSS and visible text, not just the model pose.
+ * A local tick can leave all track properties neutral while scaling a keyword.
+ * Conversely, a hidden, detached or stale keyword never counts as visible work.
+ */
+export function measureKnowledgeDrumPresentation(
+  stage,
+  state = stage.getState().drum,
+  eventKind = state?.pose?.kind,
+) {
+  const response = stage.drumResponse,
+    track = response?.track,
+    pose = state?.pose,
+    host = stage.el,
+    current = stage.current,
+    view = host?.ownerDocument?.defaultView;
+  if (!track || !pose || typeof view?.getComputedStyle !== 'function')
+    return { stylesMatch: false, trackVisible: false, focusVisible: false, visibleMotion: 0, eventMotion: 0 };
+  const computed = view.getComputedStyle(track),
+    inlineScale = scalePair(track.style.scale),
+    computedScale = scalePair(computed.scale);
+  const spotlight = track === current?.spotlight,
+    focusScale = state.presentation?.focusScale ?? pose.focusScale,
+    expectedTrackScale = spotlight ? [focusScale, pose.scaleY * focusScale] : [1, pose.scaleY];
+  const flash = spotlight && stage.effect === 'flash',
+    zoom = !spotlight && host.dataset?.presentation === 'scene' && host.dataset?.entrance === 'zoom';
+  const filter = computedFilter(computed, flash ? 2 : zoom ? 3 : 0, flash ? 'spotlight-flash' : 'scene-zoom');
+  const translateY = (value) =>
+    parseFloat(
+      String(value || '')
+        .trim()
+        .split(/\s+/)
+        .at(-1),
+    );
+  const trackStylesMatch =
+    focusScale >= 1 &&
+    focusScale <= pose.focusScale + 0.00002 &&
+    close(inlineScale[0], expectedTrackScale[0]) &&
+    close(inlineScale[1], expectedTrackScale[1]) &&
+    close(computedScale[0], expectedTrackScale[0]) &&
+    close(computedScale[1], expectedTrackScale[1]) &&
+    close(translateY(track.style.translate), pose.y, 0.0002) &&
+    close(translateY(computed.translate), pose.y, 0.0002) &&
+    close(filterBrightness(track.style.filter), pose.brightness) &&
+    filter.valid &&
+    close(filter.brightness, pose.brightness);
+  const trackVisible = visibleGlyphCount(track, host) > 0;
+  const expectedFocus = spotlight
+    ? [current.spotlight]
+    : current?.featuredMarker?.els || (current?.featuredKeyword ? [current.featuredKeyword] : []);
+  const focus = (response.focus || []).map(({ node }) => {
+    const visibleGlyphs = visibleGlyphCount(node, host);
+    const validTarget = Boolean(current?.el?.contains(node) && expectedFocus.includes(node));
+    const inline = scalePair(node.style.scale),
+      actual = scalePair(view.getComputedStyle(node).scale);
+    const expected = node === track && spotlight ? expectedTrackScale : [focusScale, focusScale];
+    const stylesMatch =
+      validTarget &&
+      inline.every((value, index) => close(value, expected[index])) &&
+      actual.every((value, index) => close(value, expected[index]));
+    return { stylesMatch, visible: validTarget && visibleGlyphs > 0, scale: actual[0], visibleGlyphs };
+  });
+  const focusStylesMatch = focus.every((node) => node.stylesMatch),
+    focusVisible = focus.some((node) => node.stylesMatch && node.visible),
+    trackMotion = trackStylesMatch && trackVisible ? amplitude(pose) : 0,
+    focusMotion = Math.max(
+      0,
+      ...focus
+        .filter((node) => node.stylesMatch && node.visible)
+        .map((node) => Math.abs(node.scale - 1) * 100),
+    );
+  return {
+    stylesMatch: trackStylesMatch && focusStylesMatch,
+    trackStylesMatch,
+    trackVisible,
+    focusStylesMatch,
+    focusVisible,
+    focusNodes: focus.length,
+    visibleFocusGlyphs: focus.reduce((sum, node) => sum + node.visibleGlyphs, 0),
+    trackMotion,
+    focusMotion,
+    visibleMotion: Math.max(trackMotion, focusMotion),
+    eventMotion: eventKind === 'tick' ? focusMotion : Math.max(trackMotion, focusMotion),
+    trackStyles: {
+      inline: { scale: track.style.scale, translate: track.style.translate, filter: track.style.filter },
+      computed: {
+        scale: computed.scale,
+        translate: computed.translate,
+        filter: computed.filter,
+        animationName: computed.animationName,
+      },
+      expectedScale: expectedTrackScale,
+      expectedTranslateY: pose.y,
+      expectedBrightness: pose.brightness,
+      parsedComputedFilter: filter,
+    },
+  };
+}
 const canvasAmplitude = (accent) => {
   const poses = accent?.pose ? [accent.pose.group, ...accent.pose.glyphs] : [];
   return Math.max(
@@ -43,18 +222,24 @@ const canvasAmplitude = (accent) => {
   );
 };
 
+export function drumCaptionScript() {
+  // This positive audio test measures existing visible targets. At the hard
+  // reading cap even 15s cannot reach a new line with an unread keyword. Sentence
+  // progression and unread-target negatives have their own independent tests.
+  const text =
+    '重鼓落下，轻鼓点亮，文字跟着声音呼吸。' +
+    '保持阅读，把连续变化连成舒服的动作。观察声音轻重，比较重点文字的缩放与回落。'.repeat(3);
+  return {
+    id: 'qa-drum-reading',
+    lines: Array.from({ length: 30 }, () => ({ text, keyword: '重鼓', holdBeats: 1 })),
+  };
+}
+
 function captionFixture(stage) {
   stage.setAutoDirection(false);
   stage.setEffect('stack');
   stage.setRate(2);
-  stage.setScript({
-    id: 'qa-drum-reading',
-    lines: Array.from({ length: 30 }, (_, index) => ({
-      text: '重鼓落下，轻鼓点亮，文字跟着声音呼吸。保持阅读，把连续变化连成舒服的动作。',
-      keyword: index % 2 ? '轻鼓' : '重鼓',
-      holdBeats: 1,
-    })),
-  });
+  stage.setScript(drumCaptionScript());
 }
 
 /** Native test-only hook. Audio receives bytes; no reference hits or BPM labels. */
@@ -97,7 +282,6 @@ export function installDrumQA(app) {
         const motion = app.dance.getMotionState(),
           knowledge = app.knowledge.getState();
         const drum = frame.rendering.drum;
-        const track = app.knowledge.drumResponse?.track;
         capture.frameCount++;
         if (!frame.measured.silent) capture.voicedFrames++;
         if (capture.sampleCount < 150 && musicTime - capture.lastSampleTime >= 0.08) {
@@ -122,8 +306,12 @@ export function installDrumQA(app) {
             confidence: drum.confidence,
             peakCanvasAccent: 0,
             peakKnowledgeMotion: 0,
+            peakKnowledgeTrackMotion: 0,
+            peakKnowledgeFocusMotion: 0,
             canvasFrames: 0,
             knowledgeFrames: 0,
+            knowledgeActiveFrames: 0,
+            visibleFocusFrames: 0,
             finiteCanvas: true,
             captionStyleMatches: true,
             canvasWithinBounds: true,
@@ -151,14 +339,33 @@ export function installDrumQA(app) {
         }
         const reading = capture.events.get(knowledge.drum?.sequence);
         if (reading && knowledge.drum.active) {
-          reading.knowledgeFrames++;
-          reading.peakKnowledgeMotion = Math.max(reading.peakKnowledgeMotion, amplitude(knowledge.drum.pose));
-          reading.captionStyleMatches &&= Boolean(
-            track &&
-            Math.abs(parseFloat(track.style.scale.trim().split(/\s+/).at(-1)) - knowledge.drum.pose.scaleY) <
-              0.00002 &&
-            track.style.filter.includes('brightness('),
+          const presentation = measureKnowledgeDrumPresentation(app.knowledge, knowledge.drum, reading.kind);
+          reading.knowledgeActiveFrames++;
+          if (presentation.eventMotion > 0) reading.knowledgeFrames++;
+          if (presentation.focusVisible && presentation.focusMotion > 0) reading.visibleFocusFrames++;
+          reading.peakKnowledgeMotion = Math.max(reading.peakKnowledgeMotion, presentation.eventMotion);
+          reading.peakKnowledgeTrackMotion = Math.max(
+            reading.peakKnowledgeTrackMotion,
+            presentation.trackMotion,
           );
+          reading.peakKnowledgeFocusMotion = Math.max(
+            reading.peakKnowledgeFocusMotion,
+            presentation.focusMotion,
+          );
+          reading.captionStyleMatches &&= presentation.stylesMatch;
+          if (!presentation.stylesMatch && !reading.firstStyleMismatch)
+            reading.firstStyleMismatch = presentation.trackStyles;
+          if (!(presentation.eventMotion > 0) && !reading.firstInvisibleKnowledge)
+            reading.firstInvisibleKnowledge = {
+              time: musicTime,
+              lineIndex: knowledge.lineIndex,
+              cursor: knowledge.cursor,
+              kind: reading.kind,
+              focusNodes: presentation.focusNodes,
+              focusVisible: presentation.focusVisible,
+              trackVisible: presentation.trackVisible,
+              stylesMatch: presentation.stylesMatch,
+            };
         }
       };
       app.playback.onFrame = recorder;
@@ -346,14 +553,24 @@ export function installDrumQA(app) {
       stage.onLine = stage.onKeyword = stage.onComplete = () => {};
       const start = performance.now() / 1000 + 2;
       let sequence = 200000;
-      for (const [index, effect] of EFFECTS.filter((row) => row.implemented).entries()) {
+      const modes = [...EFFECTS.filter((row) => row.implemented), { id: 'scene-zoom', automatic: true }];
+      for (const [index, effect] of modes.entries()) {
         stage.setPaused(false);
-        stage.setAutoDirection(false);
-        stage.setEffect(effect.id);
+        stage.setAutoDirection(Boolean(effect.automatic));
+        stage.setEffect(effect.automatic ? 'tunnel' : effect.id);
         stage.setRate(4);
         stage.setScript({
           id: `qa-drum-${effect.id}`,
-          lines: [{ text: '重鼓强调重点，轻鼓保持阅读。', keyword: '重点', holdBeats: 32 }],
+          lines: [
+            effect.automatic
+              ? {
+                  text: 'Focus makes a clear beginning.',
+                  keyword: 'Focus',
+                  sentenceType: 'opening',
+                  holdBeats: 32,
+                }
+              : { text: '重鼓强调重点，轻鼓保持阅读。', keyword: '重点', holdBeats: 32 },
+          ],
         });
         const time = start + index * 2;
         const features = {
@@ -385,6 +602,12 @@ export function installDrumQA(app) {
         }
         await wait(100);
         stage.frame({ beatIndex, phase: 0.5, time });
+        if (effect.automatic)
+          assert(
+            stage.el.dataset.presentation === 'scene' && stage.el.dataset.entrance === 'zoom',
+            'automatic zoom fixture must use the real directed entrance',
+            { presentation: stage.el.dataset.presentation, entrance: stage.el.dataset.entrance },
+          );
         const before = rectangle(stage.drumResponse.track),
           host = rectangle(stage.el);
         const baselineOverflow = overflow(before, host);
@@ -400,6 +623,7 @@ export function installDrumQA(app) {
           const state = stage.getState().drum,
             targetTrack = stage.drumResponse.track,
             box = rectangle(targetTrack);
+          const presentation = measureKnowledgeDrumPresentation(stage, state);
           const afterOverflow = overflow(box, host);
           const cssScale = parseFloat(targetTrack.style.scale.trim().split(/\s+/).at(-1));
           const computed = stage.document.defaultView.getComputedStyle(targetTrack);
@@ -411,10 +635,14 @@ export function installDrumQA(app) {
             Number(computed.opacity) > 0.001;
           const pass =
             visible &&
+            presentation.stylesMatch &&
             Number.isFinite(state.pose.y) &&
             Math.abs(state.pose.y) <= state.maxTravelPx + 0.001 &&
-            cssScale <= 1 &&
+            state.pose.scaleY <= 1 &&
+            state.pose.scaleY >= 0.8 &&
+            cssScale <= state.pose.focusScale + 0.00002 &&
             cssScale >= 0.8 &&
+            (kind !== 'tick' || (presentation.focusVisible && presentation.focusMotion > 0)) &&
             afterOverflow <= baselineOverflow + 1.2;
           peaks.push({
             kind,
@@ -422,19 +650,26 @@ export function installDrumQA(app) {
             visible,
             target: targetTrack.className,
             pose: state.pose,
+            presentation,
             maxTravelPx: state.maxTravelPx,
             baselineOverflow,
             afterOverflow,
           });
         }
-        cases.push({ effect: effect.id, pass: peaks.every((row) => row.pass), peaks });
+        cases.push({
+          effect: effect.id,
+          automatic: Boolean(effect.automatic),
+          pass: peaks.every((row) => row.pass),
+          peaks,
+        });
       }
       return {
         pass: cases.every((row) => row.pass),
         testOnly: true,
         source: 'controlled-renderer-fixture',
         audioAccuracyClaim: false,
-        checkedEffects: cases.length,
+        checkedEffects: cases.filter((row) => !row.automatic).length,
+        checkedAutomaticEntrances: cases.filter((row) => row.automatic).length,
         stage: rectangle(stage.el),
         cases,
       };

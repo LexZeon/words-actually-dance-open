@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld(
   Object.freeze({
     platform: process.platform,
     testMode: process.argv.includes('--wad-test-mode'),
-    version: versionArgument ? versionArgument.slice('--wad-version='.length) : '0.10.1',
+    version: versionArgument ? versionArgument.slice('--wad-version='.length) : '0.10.2',
     captureAvailable: process.platform === 'win32',
     chooseAudio: () => ipcRenderer.invoke('wad:choose-audio'),
     chooseScript: () => ipcRenderer.invoke('wad:choose-script'),
