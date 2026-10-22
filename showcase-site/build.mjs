@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { CLIPS, MEDIA_FILES } from './app.js';
+import { CLIPS, MEDIA_FILES, officialPlayerURL, BILIBILI_PLAYER_ORIGIN } from './app.js';
 
 const DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(DIRECTORY);
@@ -137,8 +137,27 @@ async function build() {
     app = plan.get('app.js').toString('utf8');
   assert(
     !/<iframe\b|type=["']file["']/i.test(html) && !/getUserMedia|getDisplayMedia|AudioContext/.test(app),
-    'Gallery must stay independent from capture, upload and analysis.',
+    'Gallery must use only its audited source-player factory and stay independent from capture, upload and analysis.',
   );
+  assert(
+    (app.match(/createElement\(['"]iframe['"]\)/g) ?? []).length === 1,
+    'Only the audited official-player iframe factory is allowed.',
+  );
+  for (const clip of CLIPS.filter((entry) => entry.kind === 'song')) {
+    const player = new URL(officialPlayerURL(clip.id));
+    assert(
+      player.origin === BILIBILI_PLAYER_ORIGIN &&
+        player.origin === 'https://player.bilibili.com' &&
+        player.pathname === '/player.html',
+      'An embedded player is outside the exact official Bilibili endpoint.',
+    );
+    assert(
+      player.searchParams.get('autoplay') === '1' &&
+        player.searchParams.get('muted') === '0' &&
+        player.searchParams.get('danmaku') === '0',
+      'Official-player parameters differ from the reviewed contract.',
+    );
+  }
   const streams = [];
   for (const name of MEDIA_FILES) {
     assert(/^[a-z0-9-]+\.(mp4|gif|webp)$/.test(name), 'Unexpected public-media filename.');

@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Watch actual Words Actually Dance recordings. Four silent song-driven previews and four demonstrations with original music."
+      content="Watch actual Words Actually Dance recordings with corresponding Bilibili official source players and original project music."
     />
     <title>Words Actually Dance — Film room</title>
     <link
@@ -76,6 +76,42 @@
           </div>
           <p class="player-message" id="player-message" role="status" aria-live="polite"></p>
 
+          <div class="watch-actions">
+            <button
+              type="button"
+              class="watch-button"
+              id="play-together-button"
+              hidden
+              data-i18n="playTogether"
+            >
+              Play song + demo
+            </button>
+            <button type="button" class="watch-button" id="play-with-sound-button" data-i18n="playWithSound">
+              Play with sound
+            </button>
+            <p id="watch-note"></p>
+          </div>
+          <section
+            class="source-player-section"
+            id="source-player-section"
+            aria-labelledby="source-player-title"
+            hidden
+          >
+            <div class="source-player-heading">
+              <h3 id="source-player-title" data-i18n="sourcePlayer">
+                Source video · Bilibili official player
+              </h3>
+              <button type="button" class="text-button" id="stop-source-button" data-i18n="stopSource">
+                Stop source song
+              </button>
+            </div>
+            <div class="source-player-slot" id="source-player-slot"></div>
+            <p id="source-player-note" data-i18n="sourceRequest">
+              Playback requested. If the browser blocks sound, press Play in the Bilibili player. The two
+              players are not guaranteed to stay in sync.
+            </p>
+          </section>
+
           <div class="clip-heading">
             <div>
               <p class="clip-category" id="clip-category">Original music</p>
@@ -122,10 +158,17 @@
     </main>
 
     <footer class="site-footer shell">
-      <p data-i18n="footer">
-        This is a video gallery. The recordings demonstrate software, not proven learning benefits or beat
-        accuracy.
-      </p>
+      <div>
+        <p data-i18n="footer">
+          This is a video gallery. The recordings demonstrate software, not proven learning benefits or beat
+          accuracy.
+        </p>
+        <p class="copyright-contact">
+          <span data-i18n="copyrightContact">Copyright contact</span>:
+          <a href="mailto:aivnailedeng@gmail.com">aivnailedeng@gmail.com</a> /
+          <a href="mailto:lexzeonstudio@gmail.com">lexzeonstudio@gmail.com</a>
+        </p>
+      </div>
       <a
         id="credits-link"
         href="https://github.com/LexZeon/words-actually-dance-open/blob/main/MUSIC-CREDITS.md#english"

@@ -14,6 +14,8 @@ The source tree retains optional web collaboration modules for technical researc
 
 Public demonstrations with sound capture only the application's own page under an isolated test configuration, using project-created music and text. They do not record other windows, system audio mixes, user notes or account pages. Song-linked previews/GIFs may show silent recordings of the application's own generated interface; they include neither the third-party song audio nor its source video. The full song demonstrations with sound remain local/private. A silent application preview is separate from distribution of a third-party recording.
 
+The independent video showcase can load a **Bilibili official external player** when you open a song preview or choose **Play song + demo**. Your browser then connects directly to Bilibili, which may process your IP address, browser information, referrer and its own cookies under its platform rules. The showcase does not extract or host that song audio, or send your imported study materials to the player. Stop the source player or change clips to remove the embed; the downloaded app previews contain no source-song audio.
+
 ## 简体中文
 
 公开发行默认是本地播放器，不注册本应用账号，不连接原开发者私密Site的协作库，不主动上传音乐、文案、频谱或阅读行为，也未接入本应用自建的行为统计服务。公开网页访问仍经过托管基础设施；托管层可能处理IP、浏览器信息和基础访问遥测。上述本地说明针对本应用代码，不等于网站托管方不处理网络访问数据。
@@ -25,3 +27,5 @@ Public demonstrations with sound capture only the application's own page under a
 源目录中保留可选网页协作模块用于技术研究；普通公开入口不挂载它，启用服务前需要部署者自行配置鉴权、存储、隐私与内容规则。仓库中没有可访问原私有资料的账户、Site身份或凭据。
 
 公开有声演示仅录制隔离测试配置下的软件自身页面，配乐及文字为自产，没有录其他窗口、系统混音、用户笔记或账户页面。关联歌曲的预览／GIF可展示本应用自产界面的无声录像，不含第三方歌曲音频或其源视频，有声歌曲完整版仍只留本地私有。无声应用预览与分发第三方录音是不同内容。
+
+独立视频展厅会在你打开歌曲预览或选择「**播放原曲与演示**」时加载 **Bilibili 官方外链播放器**。此时浏览器直接连接 Bilibili，对方可能按其平台规则处理IP、浏览器信息、来源信息及自己的 Cookie。展厅不提取或托管该歌曲音频，也不会把你导入的学习材料发送给播放器。停止原曲或换片会移除嵌入；下载的程序预览不含原曲音轨。
