@@ -314,6 +314,20 @@
           <option value="off">关闭虚影</option>
         </select>
         <p class="panel-note">白字先起势，淡淡的虚影稍后跟随。可固定一种，也可关闭。</p>
+        <label class="slider-label" for="ghost-frequency"
+          ><span>切换频率</span><output id="ghost-frequency-value" for="ghost-frequency">90%</output></label
+        >
+        <input
+          id="ghost-frequency"
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value="90"
+          aria-describedby="ghost-frequency-note"
+          aria-valuetext="90%"
+        />
+        <p id="ghost-frequency-note" class="panel-note">20%接近原来稳健模式，90%较常切换。仅自动虚影生效。</p>
         <label class="toggle-row"
           ><span>读完再来一遍</span><input id="repeat-toggle" type="checkbox" checked /><span
             class="toggle-switch"

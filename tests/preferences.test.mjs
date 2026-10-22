@@ -30,6 +30,7 @@ test('valid settings clamp safely and old numeric defaults migrate without overw
       rate: 4,
       intensity: 0.15,
       ghostEffect: 'auto',
+      ghostFrequency: 0.9,
       emoji: false,
       autoDirection: false,
       repeat: false,
@@ -59,4 +60,24 @@ test('keyword ghost choices survive normalization while malformed and old settin
   for (const ghostEffect of [undefined, null, true, {}, [], 'unknown', 'AUTO'])
     assert.equal(normalizePreferences({ ghostEffect }).ghostEffect, 'auto');
   assert.equal(normalizePreferences({ intensity: 0.85 }, 1).ghostEffect, 'auto');
+});
+
+test('ghost frequency restores a frequent legacy default and preserves normalized endpoints independently of reading', () => {
+  assert.equal(DEFAULT_PREFERENCES.ghostFrequency, 0.9);
+  for (const schema of [1, 2]) assert.equal(normalizePreferences({}, schema).ghostFrequency, 0.9);
+  for (const value of [undefined, null, true, false, '', ' ', [], {}, NaN, Infinity, Symbol('bad')])
+    assert.equal(normalizePreferences({ ghostFrequency: value }).ghostFrequency, 0.9);
+  for (const [value, expected] of [
+    [0, 0],
+    [0.2, 0.2],
+    ['.9', 0.9],
+    [1, 1],
+    [-3, 0],
+    [8, 1],
+  ]) {
+    const restored = normalizePreferences({ ghostFrequency: value, rate: 3, ghostEffect: 'off' });
+    assert.equal(restored.ghostFrequency, expected);
+    assert.equal(restored.rate, 3, 'The frequency preference cannot change knowledge reading speed');
+    assert.equal(restored.ghostEffect, 'off', 'A disabled control retains its stored preference');
+  }
 });

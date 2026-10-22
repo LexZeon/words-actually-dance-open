@@ -4,6 +4,7 @@ import { LocalRepository } from '../src/core/local-repository.js';
 import { parseScriptInput } from '../src/content/script-document.js';
 import { AppController } from '../src/app/app-controller.js';
 import { eventBus, EVENTS } from '../src/core/events.js';
+import { normalizePreferences } from '../src/core/preferences.js';
 
 function topic() {
   return parseScriptInput({
@@ -50,6 +51,25 @@ async function withBrowserStorage(storage, operation) {
     else globalThis.localStorage = previous;
   }
 }
+
+test('the browser repository round-trips ghost frequency and restores old snapshots without the field', async () => {
+  const stored = new Map();
+  await withBrowserStorage(
+    {
+      getItem: (key) => stored.get(key) ?? null,
+      setItem: (key, value) => stored.set(key, value),
+    },
+    async () => {
+      const repository = new LocalRepository();
+      const preferences = normalizePreferences({ ghostFrequency: 0.2, ghostEffect: 'glyph-wave', rate: 4 });
+      assert.equal(await repository.save({ schemaVersion: 2, preferences }), true);
+      assert.deepEqual(normalizePreferences((await repository.load()).preferences), preferences);
+      stored.set('wad-experiment', JSON.stringify({ schemaVersion: 1, preferences: { rate: 3 } }));
+      const legacy = await repository.load();
+      assert.equal(normalizePreferences(legacy.preferences, legacy.schemaVersion).ghostFrequency, 0.9);
+    },
+  );
+});
 
 test('missing native and browser state return null without an error notification', async () => {
   const messages = [];

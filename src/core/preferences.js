@@ -7,11 +7,19 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   rate: 2,
   intensity: 1.25,
   ghostEffect: 'auto',
+  ghostFrequency: 0.9,
   emoji: true,
   autoDirection: true,
   repeat: true,
   language: 'zh',
 });
+
+/** A normalized preference; the UI's percentage is converted at its input edge. */
+export function normalizeGhostFrequency(value) {
+  const number =
+    typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(number) ? Math.min(1, Math.max(0, number)) : DEFAULT_PREFERENCES.ghostFrequency;
+}
 
 export function normalizePreferences(value = {}, schemaVersion = 2) {
   const p = { ...DEFAULT_PREFERENCES, ...value };
@@ -20,6 +28,7 @@ export function normalizePreferences(value = {}, schemaVersion = 2) {
     Number.isFinite(numeric(v)) ? Math.min(max, Math.max(min, numeric(v))) : fallback;
   if (!EFFECTS.some((effect) => effect.id === p.effect)) p.effect = DEFAULT_PREFERENCES.effect;
   p.ghostEffect = normalizeGhostEffect(p.ghostEffect);
+  p.ghostFrequency = normalizeGhostFrequency(p.ghostFrequency);
   p.language = normalizeLocale(p.language);
   p.rate = Math.round(number(p.rate, 2, 1, 4));
   p.intensity =

@@ -31,6 +31,41 @@ const TONE_EFFECTS = Object.freeze({
   noise: 'horizontal-stretch',
 });
 
+const frequencyValue = (value) => (Number.isFinite(Number(value)) ? clamp(Number(value), 0, 1) : 0.9);
+
+function variationInterval(frequency, features) {
+  const normal = clamp(Math.round(20 - ((frequency - 0.2) * 16) / 0.7), 2, 20);
+  const active =
+    unit(features.energy) >= 0.68 &&
+    (unit(features.attack) >= 0.55 || unit(features.delivery?.drive) >= 0.65);
+  return active ? Math.max(1, Math.round(normal / 2)) : normal;
+}
+
+// These scores describe visual affinity with measured sound, not instruments.
+function variationCandidate(features, current, recent) {
+  const bass = unit(features.bass),
+    mid = unit(features.mid),
+    treble = unit(features.treble);
+  const attack = unit(features.attack),
+    brightness = unit(features.brightness ?? features.timbreBrightness);
+  const rise = Math.abs(signed(features.amplitudeTrend)) + Math.abs(signed(features.frequencyTrend));
+  const scores = {
+    'scale-echo': 0.2 + bass * 0.6 + unit(features.energy) * 0.4 + attack * 0.2,
+    'twist-shadow': 0.25 + mid * 0.35 + (1 - attack) * 0.25,
+    'vertical-lift': 0.2 + rise * 0.4 + brightness * 0.3,
+    'horizontal-stretch': 0.2 + unit(features.noisiness) * 0.5 + bass * 0.3 + attack * 0.25,
+    'glyph-wave': 0.2 + brightness * 0.45 + treble * 0.5 + attack * 0.15,
+  };
+  const preferred = chooseGhostEffect(features);
+  if (preferred) scores[preferred] += 0.8;
+  recent.forEach((effect, index) => {
+    scores[effect] -= (index + 1) * 0.55;
+  });
+  return Object.keys(scores)
+    .filter((effect) => effect !== current)
+    .sort((a, b) => scores[b] - scores[a])[0];
+}
+
 /** Select from measured proxies; a stable grid alone is never a new cue. */
 export function chooseGhostEffect(features = {}) {
   const drum = features.drum;
@@ -114,7 +149,7 @@ function interpolatePose(one, two, amount) {
 
 /** Bounded actual drawn-pose history; sampling uses the stage's elapsed time. */
 export class GhostMotionDirector {
-  constructor({ effect = 'auto' } = {}) {
+  constructor({ effect = 'auto', frequency = 0.9 } = {}) {
     this.mode = normalizeGhostEffect(effect);
     this.effect = this.mode === 'auto' || this.mode === 'off' ? 'scale-echo' : this.mode;
     this.history = [];
@@ -134,6 +169,20 @@ export class GhostMotionDirector {
     this.invalidSince = null;
     this.recordingSegment = 0;
     this.recordingBreak = false;
+    this.frequency = frequencyValue(frequency);
+    this.autoLastBeat = null;
+    this.autoObservedBeat = null;
+    this.autoHeldBeat = null;
+    this.autoInterval = null;
+    this.autoSwitches = 0;
+    this.recentEffects = [];
+    this.previousEffect = null;
+    this.transitionAt = null;
+  }
+  setFrequency(value) {
+    this.frequency = frequencyValue(value);
+    if (this.frequency <= 0.2) this.autoInterval = null;
+    return this.frequency;
   }
   setEffect(effect) {
     const mode = normalizeGhostEffect(effect);
@@ -141,6 +190,11 @@ export class GhostMotionDirector {
       this.mode = mode;
       if (mode !== 'auto' && mode !== 'off') this.effect = mode;
       this.pending = null;
+      this.autoLastBeat = null;
+      this.autoObservedBeat = null;
+      this.autoHeldBeat = null;
+      this.recentEffects = [];
+      if (mode === 'auto') this.hasSelection = false;
       this.clear();
     }
     return this.mode;
@@ -151,8 +205,25 @@ export class GhostMotionDirector {
     this.recordingSegment = 0;
     this.recordingBreak = false;
     this.wordGeneration++;
+    this.previousEffect = null;
+    this.transitionAt = null;
   }
-  observe(features, time, { paused = false } = {}) {
+  selectEffect(effect, time, beat) {
+    if (effect !== this.effect) {
+      if (this.hasSelection) {
+        this.previousEffect = this.effect;
+        this.transitionAt = time;
+        this.recentEffects = [...this.recentEffects, this.effect].slice(-2);
+        this.autoSwitches++;
+      }
+      this.effect = effect;
+    }
+    this.hasSelection = true;
+    this.lastSelection = time;
+    this.autoLastBeat = beat;
+    this.pending = null;
+  }
+  observe(features, time, { paused = false, reducedMotion = false } = {}) {
     this.paused = paused;
     if (Number.isFinite(features.sourceGeneration) && features.sourceGeneration !== this.sourceGeneration) {
       this.sourceGeneration = features.sourceGeneration;
@@ -167,6 +238,11 @@ export class GhostMotionDirector {
       this.delayBase = DELAYS[this.effect];
       this.delaySampleTime = null;
       this.invalidSince = null;
+      this.autoLastBeat = null;
+      this.autoObservedBeat = null;
+      this.autoHeldBeat = null;
+      this.autoInterval = null;
+      this.recentEffects = [];
     }
     // Advance old targets to this measured time before accepting a fresh cue.
     // A newly arrived weight cannot retroactively govern the preceding frame.
@@ -180,7 +256,12 @@ export class GhostMotionDirector {
     if (drumFresh) this.lastDrumSequence = features.drum.sequence;
     if (toneFresh) this.lastToneSequence = features.toneStyle.sequence;
     const invalid = features.audioSilent || features.silent || features.signalValid === 0;
-    if (paused || invalid) {
+    const beat =
+      Number.isSafeInteger(features.beatIndex) && features.beatIndex >= 0 ? features.beatIndex : null;
+    const enteredBeat = beat !== null && beat !== this.autoObservedBeat;
+    this.autoObservedBeat = beat;
+    if (paused || invalid || reducedMotion) {
+      this.autoHeldBeat ??= beat;
       if (paused || (this.pending && time - this.pending.lastEvidence > 0.6)) this.pending = null;
       if (this.pending) this.pending.lastCandidateTime = null;
       if (invalid && !paused) {
@@ -196,6 +277,9 @@ export class GhostMotionDirector {
       }
       return;
     }
+    if (this.autoHeldBeat !== null && beat !== null && this.autoLastBeat !== null)
+      this.autoLastBeat += Math.max(0, beat - this.autoHeldBeat);
+    this.autoHeldBeat = null;
     this.invalidSince = null;
     // Confidence describes the selected kind, not whether this physical
     // envelope attack happened. A first validated hit must not wait for kind.
@@ -216,6 +300,28 @@ export class GhostMotionDirector {
       if (!this.history.length) this.delayWeight = this.delayWeightTarget;
     }
     if (this.mode !== 'auto') return;
+    if (this.frequency > 0.2 && beat !== null) {
+      const measured = { ...features, drum: drumFresh ? features.drum : null };
+      const hasAudio =
+        (features.signalValid === 1 || features.signalValid === true) &&
+        finite(features.amplitude ?? features.rms) > 0.00003;
+      if (!hasAudio) {
+        this.autoLastBeat = beat;
+        return;
+      }
+      this.autoInterval = variationInterval(this.frequency, measured);
+      if (!this.hasSelection) {
+        this.selectEffect(chooseGhostEffect(measured) || variationCandidate(measured, null, []), time, beat);
+        // An initial choice has no preceding style to crossfade.
+        this.previousEffect = null;
+        this.transitionAt = null;
+      } else if (this.autoLastBeat === null || beat < this.autoLastBeat) {
+        this.autoLastBeat = beat;
+      } else if (enteredBeat && beat - this.autoLastBeat >= this.autoInterval) {
+        this.selectEffect(variationCandidate(measured, this.effect, this.recentEffects), time, beat);
+      }
+      return;
+    }
     // Cached drum flags retain no style-change authority; persistent tone kind
     // may nominate a candidate even in drumless music.
     const candidate = chooseGhostEffect({ ...features, drum: drumFresh ? features.drum : null });
@@ -282,12 +388,23 @@ export class GhostMotionDirector {
         : age < 0.16
           ? Math.cos((((age - 0.018) / 0.142) * Math.PI) / 2) ** 2
           : 0;
-    return styleGhostMain(pose, features, this.effect, {
+    const options = {
       intensity,
       beatIndex,
       beatPhase,
       toneAttack: attack * (0.25 + (this.toneCue?.strength ?? 0) * 0.75),
-    });
+    };
+    const current = styleGhostMain(pose, features, this.effect, options);
+    if (this.previousEffect && this.transitionAt !== null) {
+      const progress = unit((time - this.transitionAt) / 0.18);
+      if (progress < 1) {
+        const previous = styleGhostMain(pose, features, this.previousEffect, options);
+        return interpolatePose(previous, current, progress * progress * (3 - 2 * progress));
+      }
+      this.previousEffect = null;
+      this.transitionAt = null;
+    }
+    return current;
   }
   record(time, pose, { paused = false } = {}) {
     if (paused || this.mode === 'off' || !Number.isFinite(time)) return;
@@ -335,6 +452,9 @@ export class GhostMotionDirector {
       sourceGeneration: this.sourceGeneration,
       wordGeneration: this.wordGeneration,
       reducedMotion,
+      frequency: this.frequency,
+      automaticIntervalBeats: this.autoInterval,
+      automaticSwitches: this.autoSwitches,
     };
     if (this.mode === 'off' || reducedMotion || suspended || this.history.length < 2)
       return { pose: null, metadata };

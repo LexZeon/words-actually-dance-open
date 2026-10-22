@@ -1,6 +1,6 @@
 {
   "name": "words-actually-dance-private-web",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",

@@ -116,7 +116,10 @@ export class DanceStage {
     this.lastBeatFlag = Boolean(next.beat);
     this.features = next;
     const sourceGeneration = this.ghost.sourceGeneration;
-    this.ghost.observe(next, this.elapsed, { paused: this.paused });
+    this.ghost.observe(next, this.elapsed, {
+      paused: this.paused,
+      reducedMotion: this.reducedMotion,
+    });
     if (sourceGeneration !== this.ghost.sourceGeneration) {
       this.lastGhostPose = null;
       this.lastGhostState = null;
@@ -126,6 +129,10 @@ export class DanceStage {
   setIntensity(value) {
     this.intensity = clamp(Number(value) || 0.15, 0.15, 2.5);
     this.motion.setIntensity(this.intensity);
+  }
+
+  setGhostFrequency(value) {
+    return this.ghost.setFrequency(value);
   }
 
   setGhostEffect(value) {

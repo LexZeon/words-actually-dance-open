@@ -2,7 +2,7 @@ import { messageSource, normalizeLocale, translate } from '../core/i18n.js';
 
 // These regions contain user material or values owned by dynamic presenters.
 const CONTENT =
-  'script,style,svg,textarea,input,.brand-subtitle,[data-language],#dance-canvas,#knowledge-stage,#knowledge-accessible,#topic-title,#topic-list,#playlist,#effect-options,#source-label,#line-counter,#reading-hint,#audio-state,#beat-state,#toast,#script-error,#characters-value,#intensity-value,#play-caption,#welcome-play-label';
+  'script,style,svg,textarea,input,.brand-subtitle,[data-language],#dance-canvas,#knowledge-stage,#knowledge-accessible,#topic-title,#topic-list,#playlist,#effect-options,#source-label,#line-counter,#reading-hint,#audio-state,#beat-state,#toast,#script-error,#characters-value,#intensity-value,#ghost-frequency-value,#play-caption,#welcome-play-label';
 
 /** Capture only known static messages, never whole HTML or user-entered values. */
 export function createLocalization(documentRef) {

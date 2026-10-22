@@ -1,6 +1,7 @@
 import { hydrateIcons, icon } from './icons.js';
 import { formatEditableScript } from '../core/local-state.js';
 import { normalizeGhostEffect } from '../core/ghost-effects.js';
+import { normalizeGhostFrequency } from '../core/preferences.js';
 import { normalizeLocale, translate, translateFeedback, EN_EFFECTS } from '../core/i18n.js';
 import { createLocalization, applyMusicImportPolicy, musicFileImportAllowed } from './localization.js';
 
@@ -256,12 +257,14 @@ export class PlayerUI {
       'characters-per-beat': ['input', 'rate', (input) => Number(input.value)],
       'dance-intensity': ['input', 'intensity', (input) => Number(input.value)],
       'ghost-effect': ['change', 'ghostEffect', (input) => input.value],
+      'ghost-frequency': ['input', 'ghostFrequency', (input) => Number(input.value) / 100],
       'emoji-toggle': ['change', 'emoji', (input) => input.checked],
       'auto-direction-toggle': ['change', 'autoDirection', (input) => input.checked],
       'repeat-toggle': ['change', 'repeat', (input) => input.checked],
     };
     Object.entries(preferences).forEach(([id, [event, key, value]]) =>
       this.listen(id, event, (input) => {
+        if (input.currentTarget.disabled) return;
         this.run(() => this.command('preference', key, value(input.currentTarget)));
       }),
     );
@@ -387,7 +390,14 @@ export class PlayerUI {
     this.get('characters-per-beat').value = String(rate);
     this.get('characters-value').textContent = this.text('{count} 字', { count: rate });
     this.get('dance-intensity').value = String(intensity);
-    this.get('ghost-effect').value = normalizeGhostEffect(preferences.ghostEffect);
+    const ghostEffect = normalizeGhostEffect(preferences.ghostEffect);
+    const ghostPercent = Math.round(normalizeGhostFrequency(preferences.ghostFrequency) * 100);
+    this.get('ghost-effect').value = ghostEffect;
+    const frequencyInput = this.get('ghost-frequency');
+    frequencyInput.value = String(ghostPercent);
+    frequencyInput.disabled = ghostEffect !== 'auto';
+    frequencyInput.setAttribute('aria-valuetext', `${ghostPercent}%`);
+    this.get('ghost-frequency-value').textContent = `${ghostPercent}%`;
     this.get('intensity-value').textContent = this.text(
       intensity < 0.55 ? '轻柔' : intensity > 1.65 ? '夸张' : '明显',
     );

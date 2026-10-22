@@ -16,6 +16,7 @@ import {
 import { PlayerUI } from '../src/ui/player-ui.js';
 import { AppController } from '../src/app/app-controller.js';
 import { EFFECTS } from '../src/visuals/effect-catalog.js';
+import { normalizePreferences } from '../src/core/preferences.js';
 
 class Node {
   constructor({ protectedContent = false, attributes = {}, value = '' } = {}) {
@@ -157,6 +158,111 @@ test('dynamic player state, effects, and source names follow English without tra
   assert.equal(ui.get('source-label').textContent, 'Demo · Bright');
   for (const effect of EFFECTS)
     assert.ok(EN_EFFECTS[effect.id]?.every((value) => !/[\p{Script=Han}]/u.test(value)));
+});
+
+test('the frequency range sends normalized commands, restores percentages and disables only outside automatic mode', async () => {
+  class Control extends Node {
+    constructor() {
+      super();
+      this.events = new Map();
+      this.disabled = false;
+    }
+    addEventListener(type, callback) {
+      this.events.set(type, callback);
+    }
+    emit(type) {
+      this.events.get(type)?.({ currentTarget: this });
+    }
+  }
+  const nodes = new Map(),
+    commands = [];
+  const get = (id) => {
+    if (!nodes.has(id)) nodes.set(id, new Control());
+    return nodes.get(id);
+  };
+  let preferences = normalizePreferences();
+  const ui = Object.create(PlayerUI.prototype);
+  const documentRef = Object.assign(new Control(), {
+    querySelectorAll: () => [],
+    querySelector: (selector) => (selector === '.brand' ? get('brand') : null),
+  });
+  Object.assign(ui, {
+    document: documentRef,
+    get,
+    language: 'zh',
+    abort: new AbortController(),
+    ready: true,
+    destroyed: false,
+    busy: new WeakSet(),
+    authoringMode: 'source-only',
+    handlers: {
+      preference(key, value) {
+        commands.push([key, value]);
+        preferences = normalizePreferences({ ...preferences, [key]: value });
+        ui.renderPreferences(preferences);
+      },
+    },
+  });
+  ui.bind();
+  ui.renderPreferences(preferences);
+  const slider = get('ghost-frequency');
+  assert.equal(slider.value, '90');
+  assert.equal(get('ghost-frequency-value').textContent, '90%');
+  assert.equal(slider.disabled, false);
+  slider.value = '20';
+  slider.emit('input');
+  await new Promise(setImmediate);
+  assert.deepEqual(commands.at(-1), ['ghostFrequency', 0.2]);
+  assert.equal(preferences.rate, 2);
+  assert.equal(slider.getAttribute('aria-valuetext'), '20%');
+  for (const effect of ['glyph-wave', 'off']) {
+    get('ghost-effect').value = effect;
+    get('ghost-effect').emit('change');
+    await new Promise(setImmediate);
+    assert.equal(slider.disabled, true);
+    const count = commands.length;
+    slider.emit('input');
+    await new Promise(setImmediate);
+    assert.equal(commands.length, count, 'A disabled frequency input cannot dispatch a command');
+    assert.equal(preferences.ghostFrequency, 0.2);
+  }
+  get('ghost-effect').value = 'auto';
+  get('ghost-effect').emit('change');
+  await new Promise(setImmediate);
+  assert.equal(slider.disabled, false);
+  assert.equal(slider.value, '20', 'Returning to auto restores the saved value');
+  slider.value = '0';
+  slider.emit('input');
+  await new Promise(setImmediate);
+  assert.equal(preferences.ghostFrequency, 0);
+  assert.equal(get('ghost-frequency-value').textContent, '0%');
+  ui.abort.abort();
+});
+
+test('the frequency control has a labelled accessible percentage and complete bilingual guidance', async () => {
+  const html = await fs.readFile(new URL('../src/index.html', import.meta.url), 'utf8');
+  const input = /<input\s[^>]*id="ghost-frequency"[^>]*>/s.exec(html)?.[0];
+  assert.ok(input);
+  for (const expected of [
+    'type="range"',
+    'min="0"',
+    'max="100"',
+    'step="5"',
+    'value="90"',
+    'aria-describedby="ghost-frequency-note"',
+    'aria-valuetext="90%"',
+  ])
+    assert.ok(input.includes(expected));
+  assert.match(html, /<label[^>]*for="ghost-frequency"[^>]*>/);
+  assert.match(html, /<output[^>]*id="ghost-frequency-value"[^>]*for="ghost-frequency"[^>]*>90%<\/output>/);
+  assert.equal(translate('en', '切换频率'), 'Effect changes');
+  assert.equal(translate('zh', '切换频率'), '切换频率');
+  const guidance = '20%接近原来稳健模式，90%较常切换。仅自动虚影生效。';
+  assert.equal(
+    translate('en', guidance),
+    '20% is close to the original steady mode; 90% changes more often. Only applies to automatic echoes.',
+  );
+  assert.equal(translate('zh', guidance), guidance);
 });
 
 test('public web music-file import is hidden and rejected before file reads, while local preview keeps it', async () => {

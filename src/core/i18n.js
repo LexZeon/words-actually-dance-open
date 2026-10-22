@@ -110,6 +110,9 @@ export const EN_MESSAGES = Object.freeze({
   '随声音上提、下落、甩动，或放开跳得更夸张。':
     'Lift, fall, and sway with the sound. Increase this for bolder movement.',
   关键词虚影: 'Keyword echoes',
+  切换频率: 'Effect changes',
+  '20%接近原来稳健模式，90%较常切换。仅自动虚影生效。':
+    '20% is close to the original steady mode; 90% changes more often. Only applies to automatic echoes.',
   随音乐自动选择: 'Follow the music',
   缩放回声: 'Scale echo',
   左右扭影: 'Twist shadow',

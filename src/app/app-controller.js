@@ -434,6 +434,7 @@ export class AppController {
     this.knowledge.setRate(p.rate);
     this.dance.setIntensity(p.intensity);
     this.dance.setGhostEffect(p.ghostEffect);
+    this.dance.setGhostFrequency(p.ghostFrequency);
     this.dance.setEmoji(p.emoji ? this.activeTopic.emoji : '');
     this.ui.renderPreferences(p);
   }

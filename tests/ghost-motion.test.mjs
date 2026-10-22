@@ -593,8 +593,9 @@ test('actual zero-background 120ms plucks draw a finite past-pose tail during th
   });
 });
 
-test('the same real source changes auto style from lead to short zero-background plucks after two or three real notes', () => {
+test('the conservative 20% mode still follows lead to plucks after two or three real notes', () => {
   withStage(({ stage, tick }) => {
+    stage.ghost.setFrequency(0.2);
     const fixture = toneStylePcm({ profile: 'pluck', background: 0, noteSeconds: 0.12, seconds: 5.5 });
     const lead = toneStylePcm({
       profile: 'lead',
@@ -769,4 +770,152 @@ test('a paused ghost freezes exactly, clears on word/source/resize, and cannot s
     assert.equal(stage.getGhostState().layers.ghost, null);
     assert.ok(stage.getMotionState().poses, 'Normal motion remains available when the effect is off');
   });
+});
+
+function automaticFrames({
+  frequency = 0.9,
+  bpm = 120,
+  fps = 60,
+  seconds = 12,
+  energy = 0.4,
+  attack = 0.2,
+} = {}) {
+  const director = new GhostMotionDirector({ frequency });
+  const changes = [];
+  for (let frame = 0; frame <= seconds * fps; frame++) {
+    const time = frame / fps,
+      position = (time * bpm) / 60;
+    director.observe(
+      {
+        ...features,
+        energy,
+        attack,
+        bpm,
+        beatIndex: Math.floor(position + 1e-8),
+        beatPhase: position % 1,
+        toneStyle: tone('pad', 1, false),
+      },
+      time,
+    );
+    if (changes.at(-1)?.effect !== director.effect)
+      changes.push({ effect: director.effect, beat: Math.floor(position + 1e-8), time });
+  }
+  return { director, changes };
+}
+
+test('90% automatic frequency changes at shared four-beat boundaries across tempo and frame rates, without synthesizing hits', () => {
+  for (const bpm of [60, 120, 180])
+    for (const fps of [30, 60, 144]) {
+      const { director, changes } = automaticFrames({ bpm, fps, seconds: 24 });
+      assert.ok(changes.length >= 5, JSON.stringify({ bpm, fps, changes }));
+      for (let i = 1; i < changes.length; i++) assert.equal(changes[i].beat - changes[i - 1].beat, 4);
+      assert.ok(new Set(changes.map((x) => x.effect)).size >= 3);
+      assert.equal(director.toneCue, null, 'A style change is not a detected envelope attack');
+      assert.equal(director.lastDrumSequence, null);
+      assert.equal(director.sample(24).metadata.frequency, 0.9);
+    }
+});
+
+test('the frequency slider retains conservative 20% selection and increases cadence for active music at 90%', () => {
+  const slow = automaticFrames({ frequency: 0.2 }),
+    fast = automaticFrames({ frequency: 0.9 }),
+    active = automaticFrames({ frequency: 0.9, energy: 0.9, attack: 0.8 });
+  assert.equal(slow.changes.length, 1, 'The old stable-tone choice remains at 20%');
+  assert.ok(fast.changes.length > slow.changes.length);
+  assert.ok(active.changes.length > fast.changes.length);
+  for (let i = 1; i < active.changes.length; i++)
+    assert.equal(active.changes[i].beat - active.changes[i - 1].beat, 2);
+  assert.equal(active.director.setFrequency(9), 1);
+  assert.equal(active.director.setFrequency(-2), 0);
+  assert.equal(active.director.setFrequency(NaN), 0.9);
+});
+
+test('automatic cadence freezes over pause, quiet and reduced motion and never catches up after a gap', () => {
+  const d = new GhostMotionDirector({ frequency: 0.9 });
+  const f = (beat) => ({
+    ...features,
+    energy: 0.4,
+    attack: 0.2,
+    beatIndex: beat,
+    toneStyle: tone('pad', 1, false),
+  });
+  d.observe(f(0), 0);
+  d.observe(f(3), 1.5);
+  const held = d.effect;
+  d.clear();
+  d.observe(f(4), 2);
+  assert.notEqual(d.effect, held, 'A word/history clear cannot restart the global cadence');
+  const chosen = d.effect;
+  d.observe(f(5), 2.5, { paused: true });
+  d.observe(f(20), 10, { paused: true });
+  d.observe(f(20), 10.1);
+  assert.equal(d.effect, chosen, 'Paused wall time creates no switch debt');
+  d.observe({ ...f(21), audioSilent: 1 }, 10.5);
+  d.observe({ ...f(80), audioSilent: 1 }, 40);
+  d.observe(f(80), 40.1);
+  assert.equal(d.effect, chosen, 'Quiet internal beats cannot rotate styles or queue a switch');
+  d.observe(f(81), 40.5, { reducedMotion: true });
+  d.observe(f(100), 50, { reducedMotion: true });
+  d.observe(f(100), 50.1);
+  assert.equal(d.effect, chosen);
+  d.observe(f(200), 100);
+  assert.equal(d.autoSwitches, 2, 'One dropped frame permits at most one new style');
+  d.setEffect('off');
+  for (let b = 201; b < 220; b++) d.observe(f(b), b / 2);
+  assert.equal(d.autoSwitches, 2);
+  d.setEffect('vertical-lift');
+  for (let b = 220; b < 240; b++) d.observe(f(b), b / 2);
+  assert.equal(d.effect, 'vertical-lift');
+});
+
+test('a scheduled style blends main poses and preserves the actual historical layer through the change', () => {
+  const d = new GhostMotionDirector({ frequency: 0.9 });
+  const f = (beat) => ({
+    ...features,
+    energy: 0.4,
+    attack: 0.2,
+    beatIndex: beat,
+    toneStyle: tone('pad', 1, false),
+  });
+  const pose = neutralMotion(3);
+  pose.envelope = 0.8;
+  d.observe(f(0), 0);
+  for (let i = 0; i <= 119; i++) {
+    const t = i / 60;
+    d.record(
+      t,
+      d.styleMain(pose, f(Math.floor(t * 2)), t, { beatIndex: Math.floor(t * 2), beatPhase: (t * 2) % 1 }),
+    );
+  }
+  const old = d.effect;
+  d.observe(f(4), 2);
+  assert.notEqual(d.effect, old);
+  const blended = d.styleMain(pose, f(4), 2, { beatIndex: 4, beatPhase: 0.25 });
+  assert.deepEqual(blended, styleGhostMain(pose, f(4), old, { beatIndex: 4, beatPhase: 0.25 }));
+  const retained = structuredClone(d.history);
+  const past = d.sample(2);
+  assert.ok(past.metadata.active);
+  assert.deepEqual(d.history, retained, 'Changing styles never rewrites old poses');
+  const finished = d.styleMain(pose, f(4), 2.2, { beatIndex: 4, beatPhase: 0.25 });
+  assert.deepEqual(finished, styleGhostMain(pose, f(4), d.effect, { beatIndex: 4, beatPhase: 0.25 }));
+  assert.ok(past.metadata.delaySeconds >= 0.08 && past.metadata.delaySeconds <= 0.16);
+});
+
+test('an energetic change inside a beat waits for the next shared beat before changing style', () => {
+  const d = new GhostMotionDirector({ frequency: 0.9 });
+  const f = (beat, active = false) => ({
+    ...features,
+    energy: active ? 0.9 : 0.4,
+    attack: active ? 0.8 : 0.2,
+    beatIndex: beat,
+    toneStyle: tone('pad', 1, false),
+  });
+  d.observe(f(0), 0);
+  d.observe(f(1), 0.5);
+  d.observe(f(2), 1);
+  const old = d.effect;
+  d.observe(f(2, true), 1.3);
+  assert.equal(d.effect, old, 'An in-beat energy rise cannot jump styles');
+  d.observe(f(3, true), 1.5);
+  assert.notEqual(d.effect, old);
 });

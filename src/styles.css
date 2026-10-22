@@ -1026,6 +1026,10 @@ input[type='range'] {
   height: 3px;
   cursor: pointer;
 }
+input[type='range']:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .toggle-row {
   display: flex;
   align-items: center;

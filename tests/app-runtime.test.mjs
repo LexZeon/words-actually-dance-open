@@ -46,6 +46,7 @@ function runtime(overrides = {}) {
     setEmoji() {},
     setIntensity() {},
     setGhostEffect() {},
+    setGhostFrequency() {},
     destroy: () => calls.push(['destroy', 'dance']),
   };
   const knowledge = {
@@ -408,6 +409,30 @@ test('language changes pause first, preserve built-in indices and likes, and nev
   assert.equal(app.activeTopic.title, '我的原文');
   assert.equal(scripts.length, count, 'Changing chrome must not rebuild a user-authored script');
   assert.equal(app.state.playing, false);
+  await app.destroy();
+});
+
+test('ghost frequency restores, applies and saves without changing the knowledge reading rate', async () => {
+  const r = runtime(),
+    applied = [],
+    rates = [],
+    writes = [];
+  r.repository.load = async () => ({ schemaVersion: 2, preferences: { ghostFrequency: 0.2, rate: 3 } });
+  r.repository.save = (value) => writes.push(structuredClone(value));
+  r.dance.setGhostFrequency = (value) => applied.push(value);
+  r.knowledge.setRate = (value) => rates.push(value);
+  const app = new AppController(r.options);
+  await app.boot();
+  assert.equal(applied.at(-1), 0.2);
+  app.preference('ghostFrequency', 0.9);
+  assert.equal(applied.at(-1), 0.9);
+  assert.equal(writes.at(-1).preferences.ghostFrequency, 0.9);
+  app.preference('ghostEffect', 'off');
+  assert.equal(writes.at(-1).preferences.ghostFrequency, 0.9);
+  app.preference('ghostFrequency', 20);
+  assert.equal(applied.at(-1), 1, 'External preference input is clamped before it reaches the stage');
+  assert.ok(rates.every((value) => value === 3));
+  assert.equal(app.state.preferences.rate, 3);
   await app.destroy();
 });
 
