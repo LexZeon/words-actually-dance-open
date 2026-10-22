@@ -1,0 +1,22 @@
+node_modules/
+dist/
+artifacts/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+*.mp4
+
+# Reviewed original demonstration videos
+!media/
+!media/demo-overview.mp4
+!media/demo-ghosts.mp4
+!media/demo-learning.mp4

@@ -1,0 +1,27 @@
+{
+  "name": "words-actually-dance",
+  "version": "0.10.0",
+  "private": true,
+  "description": "字真的在跳动 · Windows 音乐与文字实验",
+  "license": "MIT",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "author": {
+    "name": "LexZeon Studio"
+  },
+  "scripts": {
+    "start": "electron .",
+    "preview": "node scripts/preview.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "format": "prettier --write src electron scripts tests web package.json",
+    "format:check": "prettier --check src electron scripts tests web package.json",
+    "package:win": "node scripts/package-win.mjs"
+  },
+  "packageManager": "pnpm@11.25.0",
+  "devDependencies": {
+    "electron": "44.7.0",
+    "prettier": "^3.9.10"
+  },
+  "wadDistribution": "open-source"
+}

@@ -1,0 +1,325 @@
+/**
+ * Knowledge-text renderer catalog. These modes do not control the dance stage.
+ * No animation code or timers live here.
+ * All implemented variants use the player's shared beat timeline and grayscale.
+ * intensity is a relative motion weight from 0 to 1, not an audio measurement.
+ */
+export const EFFECT_TARGET = 'knowledge-text';
+const freezeEntries = (entries) =>
+  Object.freeze(entries.map((entry) => Object.freeze({ target: EFFECT_TARGET, ...entry })));
+
+export const EFFECTS = freezeEntries([
+  {
+    id: 'stack',
+    label: '滚动叠加',
+    description: '当前句居中；旧句翻转、缩小并保留在边缘，形成文字瀑布。',
+    intensity: 0.34,
+    implemented: true,
+  },
+  {
+    id: 'karaoke',
+    label: '逐词高亮',
+    description: '整句以灰阶呈现，按节拍分组提亮正在出现的词。',
+    intensity: 0.25,
+    implemented: true,
+  },
+  {
+    id: 'typewriter',
+    label: '逐字渐显',
+    description: '按节拍逐字或分组出现，字符以轻微位移和透明度平滑入场。',
+    intensity: 0.24,
+    implemented: true,
+  },
+  {
+    id: 'pop',
+    label: '单字弹跳',
+    description: '词与字符在节拍上轻弹放大，再平滑回落。',
+    intensity: 0.55,
+    implemented: true,
+  },
+  {
+    id: 'marker',
+    label: '划重点',
+    description: '关键词出现时，以白色划线或灰阶标记沿字形展开。',
+    intensity: 0.3,
+    implemented: true,
+  },
+  {
+    id: 'flip',
+    label: '透视翻牌',
+    description: '新句沿透视轴翻入，旧句随节拍翻出当前阅读位置。',
+    intensity: 0.48,
+    implemented: true,
+  },
+  {
+    id: 'quarter-turn',
+    label: '90° 旋转接力',
+    description: '一句打字读完，已读文字整体转过90°、缩放让位，下一句水平接着打字。',
+    intensity: 0.62,
+    implemented: true,
+  },
+  {
+    id: 'waterfall-flow',
+    label: '瀑布流文字',
+    description: '已读文字保留在同一大版面，整体旋转、推移与缩放，在相邻位置接着打新句。',
+    intensity: 0.72,
+    implemented: true,
+  },
+  {
+    id: 'tunnel',
+    label: '文字穿梭',
+    description: '文字由中心缩放进入，制造迎面推进的层次。',
+    intensity: 0.65,
+    implemented: true,
+  },
+  {
+    id: 'glitch',
+    label: '灰阶故障',
+    description: '以短促错位与灰白重影表达故障感，不使用 RGB 彩色分离。',
+    intensity: 0.6,
+    implemented: true,
+  },
+  {
+    id: 'shake',
+    label: '重音震动',
+    description: '强拍触发受控位移，弱拍收敛，保留阅读稳定性。',
+    intensity: 0.75,
+    implemented: true,
+  },
+  {
+    id: 'overlay',
+    label: '旁白浮现',
+    description: '补充文字以轻斜排版和错位入场作为次级阅读层。',
+    intensity: 0.28,
+    implemented: true,
+  },
+  {
+    id: 'barrage',
+    label: '弹幕漂移',
+    description: '文字沿横向轨迹滑动，拍点控制显现和句子切换。',
+    intensity: 0.42,
+    implemented: true,
+  },
+  {
+    id: 'flash',
+    label: '黑白快闪',
+    description: '重点短语随拍提亮与缩放，保持黑色背景和白色字体。',
+    intensity: 0.72,
+    implemented: true,
+  },
+  {
+    id: 'wave',
+    label: '波浪文字',
+    description: '字符沿节拍相位轻柔起伏，形成连续的灰阶文字波。',
+    intensity: 0.4,
+    implemented: true,
+  },
+  {
+    id: 'scatter',
+    label: '散落聚拢',
+    description: '句内字符在拍点由错位位置平滑聚合，结束后分散退出。',
+    intensity: 0.66,
+    implemented: true,
+  },
+  {
+    id: 'waterfall',
+    label: '文字瀑布',
+    description: '当前句居中，历史句沿垂直方向逐层滚动保留。',
+    intensity: 0.36,
+    implemented: true,
+  },
+  {
+    id: 'slide',
+    label: '横向推移',
+    description: '句子沿横向轨迹进入中心，并按拍推移旧句。',
+    intensity: 0.4,
+    implemented: true,
+  },
+  {
+    id: 'underline',
+    label: '逐词下划线',
+    description: '按拍沿正在出现的文字展开白色下划线。',
+    intensity: 0.26,
+    implemented: true,
+  },
+  {
+    id: 'invert',
+    label: '局部黑白反相',
+    description: '重点词用白底黑字的局部反相表达强调。',
+    intensity: 0.46,
+    implemented: true,
+  },
+  {
+    id: 'echo',
+    label: '文字残影',
+    description: '移动文字留下短暂灰阶回声，随后收敛到清晰主句。',
+    intensity: 0.42,
+    implemented: true,
+  },
+  {
+    id: 'fold',
+    label: '折叠展开',
+    description: '字符组沿局部透视轴折叠并展开成新句。',
+    intensity: 0.52,
+    implemented: true,
+  },
+]);
+
+/** Reference names only; these must not be offered as implemented playback modes. */
+export const FUTURE_EFFECTS = freezeEntries(
+  [
+    {
+      id: 'word-flash',
+      label: '逐词快闪',
+      description: '让词组在离散拍点交替占据主阅读区。',
+      intensity: 0.62,
+    },
+    {
+      id: 'rapid-typewriter',
+      label: '高频打字机',
+      description: '每拍内使用更细的字符分组。',
+      intensity: 0.4,
+    },
+    { id: 'drum-beat-text', label: '节奏鼓点字', description: '以鼓点特征选择字符动作。', intensity: 0.66 },
+    { id: 'zoom-in-slam', label: '迎面砸来字', description: '短语快速推进，再缓冲落定。', intensity: 0.78 },
+    { id: 'marquee', label: '横向跑马灯', description: '整行横向连续通过阅读区。', intensity: 0.42 },
+    {
+      id: 'infinite-scroll',
+      label: '无限循环滚动',
+      description: '布局循环衔接，实际知识仍按拍调度。',
+      intensity: 0.36,
+    },
+    {
+      id: 'micro-flicker',
+      label: '细微闪烁',
+      description: '短暂灰阶变化，避免高频全屏闪烁。',
+      intensity: 0.28,
+    },
+    {
+      id: 'jelly-bounce',
+      label: 'Q 弹果冻字',
+      description: '用拉伸与回弹表达柔软的字符形变。',
+      intensity: 0.62,
+    },
+    { id: 'breathing-text', label: '呼吸渐大', description: '文字在跨拍周期中缓慢缩放。', intensity: 0.2 },
+    { id: 'sudden-scale', label: '骤然放大', description: '强调词在拍点增大后平滑归位。', intensity: 0.62 },
+    { id: 'shock-shrink', label: '震缩字效', description: '短暂收缩制造强调后的回落。', intensity: 0.58 },
+    {
+      id: 'soft-landing-bounce',
+      label: '软着陆弹动',
+      description: '入场速度渐缓，并以小幅回弹落定。',
+      intensity: 0.34,
+    },
+    { id: 'heartbeat-pulse', label: '心跳同步', description: '双脉冲拍型驱动轻重两次缩放。', intensity: 0.4 },
+    { id: 'louver-flip', label: '百叶窗翻转', description: '分组字符依次绕局部轴翻转。', intensity: 0.54 },
+    { id: 'gyro-rotation', label: '陀螺仪旋转', description: '用多方向旋转表现空间变化。', intensity: 0.7 },
+    { id: 'side-roller', label: '侧向滚轮', description: '横向连续翻转并衔接新词。', intensity: 0.56 },
+    { id: 'windmill-spin', label: '风车自转', description: '词围绕局部中心转动。', intensity: 0.64 },
+    { id: 'multi-axis-flip', label: '多轴翻转', description: '根据关系类型切换翻转轴。', intensity: 0.68 },
+    {
+      id: 'fast-slide-fade',
+      label: '极速淡入滑出',
+      description: '短距离快速滑动结合透明度缓冲。',
+      intensity: 0.48,
+    },
+    { id: 'diagonal-transit', label: '对角线穿梭', description: '文字沿对角轨迹交错进入。', intensity: 0.52 },
+    { id: 'peek-a-boo', label: '底部探头字', description: '文字从阅读区下沿轻轻探入。', intensity: 0.3 },
+    { id: 'misaligned-slide', label: '错位滑行', description: '字符组使用不同位移节奏。', intensity: 0.46 },
+    { id: 'carpet-rollout', label: '地毯式铺开', description: '句子从一个边缘逐段展开。', intensity: 0.44 },
+    {
+      id: 'shadow-diffusion',
+      label: '阴影边缘扩散',
+      description: '灰阶轮廓向外扩散后收敛。',
+      intensity: 0.3,
+    },
+    {
+      id: 'mechanical-dismantle',
+      label: '机械化拆解',
+      description: '字符按结构分段退出与组装。',
+      intensity: 0.64,
+    },
+    {
+      id: 'pixel-assembly',
+      label: '像素块重组',
+      description: '字符像素分组聚合形成新文本。',
+      intensity: 0.62,
+    },
+    {
+      id: 'melting-particles',
+      label: '消融粒子',
+      description: '字形消融为灰白字符粒子再聚合。',
+      intensity: 0.68,
+    },
+    {
+      id: 'freeze-frame-pov',
+      label: '定格吐槽字',
+      description: '内容暂驻并出现一段次级说明。',
+      intensity: 0.28,
+    },
+    {
+      id: 'handwritten-label',
+      label: '手写体花字',
+      description: '以笔画显现和字体层次表达标注。',
+      intensity: 0.3,
+    },
+    { id: 'bubble-text', label: '气泡文字块', description: '文字群形成可交互的软边分组。', intensity: 0.32 },
+    {
+      id: 'text-matrix',
+      label: '满屏文字矩阵',
+      description: '在矩阵结构中保留当前阅读焦点。',
+      intensity: 0.46,
+    },
+    {
+      id: 'vertical-scroll-curtain',
+      label: '上下滚动拉幕',
+      description: '整组文本按节拍滚动揭示。',
+      intensity: 0.48,
+    },
+    {
+      id: 'text-grid',
+      label: '九宫格文字块',
+      description: '多个文本块在网格中接力成为主焦点。',
+      intensity: 0.42,
+    },
+    {
+      id: 'dual-lane-marquee',
+      label: '左右双栏跑马灯',
+      description: '两列分别承载概念与解释。',
+      intensity: 0.48,
+    },
+    {
+      id: 'hanging-indent',
+      label: '多层级悬挂缩进',
+      description: '缩进与位置变化表达概念层级。',
+      intensity: 0.24,
+    },
+    { id: 'word-strike', label: '逐词敲击变白', description: '节拍驱动逐词明暗转换。', intensity: 0.38 },
+    {
+      id: 'motion-blur-stretch',
+      label: '模糊拉伸进场',
+      description: '运动方向上的短暂拉伸随后收敛。',
+      intensity: 0.54,
+    },
+    {
+      id: 'staggered-slide',
+      label: '错位横滑出场',
+      description: '字符分组按拍点错位退出。',
+      intensity: 0.48,
+    },
+    {
+      id: 'retro-print',
+      label: '复古报纸印刷感',
+      description: '用灰阶颗粒与层级排版形成印刷风格。',
+      intensity: 0.22,
+    },
+    {
+      id: 'rap-progressive-stack',
+      label: '说唱词渐进式叠加',
+      description: '短语随节拍叠加并维持清晰主焦点。',
+      intensity: 0.58,
+    },
+  ].map((entry) => ({ ...entry, implemented: false })),
+);
+
+export const EFFECT_CATALOG = Object.freeze([...EFFECTS, ...FUTURE_EFFECTS]);
+export default EFFECTS;

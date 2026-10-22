@@ -1,0 +1,888 @@
+@import url('./text-flow.css');
+/* Finite CSS interpolation; KnowledgeStage starts each movement on a music tick. */
+/* Quarter turns are sampled from the shared beat phase, without CSS wall-clock transitions. */
+.knowledge-stage[data-effect='quarter-turn'] {
+  perspective: none;
+  overflow: hidden;
+}
+.knowledge-stage[data-effect='quarter-turn'] .knowledge-line {
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: var(--quarter-reading-width, 680px);
+  padding: 0;
+  font-size: 48px;
+  font-weight: 450;
+  line-height: 1.2;
+  letter-spacing: 0.025em;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  transition: none !important;
+  animation: none !important;
+  transform-origin: center;
+}
+.knowledge-stage[data-effect='quarter-turn'] .current {
+  color: #f3f3f0;
+}
+.knowledge-stage[data-effect='quarter-turn'] .current .char.read {
+  color: inherit;
+}
+.knowledge-stage[data-effect='quarter-turn'] .history .reading-track {
+  width: 100%;
+  max-width: none;
+  white-space: normal;
+  text-wrap: wrap;
+  font-size: inherit;
+  letter-spacing: inherit;
+  line-height: 1.2;
+}
+.knowledge-stage[data-effect='quarter-turn'] .history .phrase {
+  margin: var(--phrase-reserve-y, 1px) var(--phrase-reserve-x, 0px) !important;
+}
+.knowledge-stage[data-effect='quarter-turn'] .history .keyword {
+  padding: 0 3px !important;
+}
+.knowledge-stage[data-effect='quarter-turn'] .current .reading-track {
+  width: auto;
+  max-width: 100%;
+  line-height: 1.2;
+  transform: none;
+}
+.knowledge-stage[data-effect='quarter-turn'] .current .keyword.active {
+  color: inherit;
+  background: none;
+}
+.knowledge-stage[data-effect='quarter-turn'] .current .keyword.active .char.read {
+  color: inherit;
+}
+.knowledge-stage[data-effect='quarter-turn'] .history .char,
+.knowledge-stage[data-effect='quarter-turn'] .history .phrase,
+.knowledge-stage[data-effect='quarter-turn'] .history.just-retired {
+  animation: none;
+  transition: none;
+}
+.knowledge-stage .reading-track {
+  display: block;
+  line-height: 1;
+}
+.knowledge-stage .phrase {
+  display: inline-block;
+  line-height: 1;
+  vertical-align: middle;
+  margin: var(--phrase-reserve-y, 1px) var(--phrase-reserve-x, 0px);
+}
+.knowledge-stage .phrase-glyphs {
+  display: inline-block;
+  line-height: 1;
+  vertical-align: middle;
+  /* Entry paths stay in the group's reserved lane; completed text remains intact. */
+  clip-path: inset(-10px 0);
+}
+.knowledge-stage .keyword .phrase-glyphs {
+  clip-path: inset(-0.13em -0.13em);
+}
+.knowledge-stage .history .phrase-glyphs {
+  clip-path: none;
+}
+.knowledge-stage .spotlight {
+  display: none;
+}
+.knowledge-stage:not([data-effect='karaoke']) .current .char.unread {
+  opacity: 0;
+}
+.knowledge-stage .history .char.read {
+  color: inherit;
+}
+.knowledge-stage .history .keyword {
+  background: none;
+  color: inherit;
+  transform: none;
+}
+.knowledge-stage .history .spotlight {
+  display: none !important;
+}
+.knowledge-stage .history .reading-track {
+  opacity: 1 !important;
+}
+.knowledge-stage[data-paused='true'] * {
+  animation-play-state: paused !important;
+}
+.knowledge-stage .current.arriving {
+  animation: knowledge-arrive var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-effect='flip'] .current.arriving {
+  animation: knowledge-flip-in var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-effect='slide'] .current.arriving {
+  animation: knowledge-slide-in var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-effect='fold'] .current.arriving {
+  animation: knowledge-fold-in var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-effect='barrage'] .current {
+  white-space: nowrap;
+  animation: none;
+  transition: transform var(--beat-duration, 0.55s) linear;
+}
+.knowledge-stage[data-effect='overlay'] .current.arriving {
+  animation: knowledge-overlay-in var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-effect='pop'] .current .reading-track,
+.knowledge-stage[data-effect='flash'] .current .reading-track {
+  opacity: 0;
+}
+.knowledge-stage[data-effect='pop'] .current .spotlight,
+.knowledge-stage[data-effect='flash'] .current .spotlight {
+  display: inline-block;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  color: #efefea;
+  font-size: 1.25em;
+  letter-spacing: 0.035em;
+  transform-origin: center;
+}
+.knowledge-stage[data-effect='pop'] .spotlight.hit {
+  animation: spotlight-pop var(--char-duration, 0.3s) var(--ease) both;
+}
+.knowledge-stage[data-effect='flash'] .spotlight.hit {
+  animation: spotlight-flash var(--char-duration, 0.3s) ease-out both;
+}
+.knowledge-stage .spotlight.keyword-focus {
+  background: #f3f3f0;
+  color: #080808 !important;
+  border-radius: 2px;
+  padding: 0 0.14em;
+}
+.knowledge-stage[data-effect='wave'] .char.new,
+.knowledge-stage[data-effect='wave'] .char.wave-hit {
+  animation: knowledge-wave var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-effect='scatter'] .char.new {
+  animation: knowledge-scatter var(--char-duration, 0.4s) var(--ease) both;
+}
+.knowledge-stage[data-effect='waterfall'] .char.new {
+  animation: knowledge-waterfall var(--char-duration, 0.4s) var(--ease) both;
+}
+.knowledge-stage[data-effect='waterfall'] .current.arriving {
+  animation: knowledge-waterfall-line var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-effect='slide'] .char.new {
+  animation: knowledge-char-slide var(--char-duration, 0.3s) var(--ease) both;
+}
+.knowledge-stage[data-effect='underline'] .phrase.focus:after {
+  content: '';
+  position: absolute;
+  bottom: 0.1em;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #b6b6b0;
+  transform-origin: left;
+  animation: knowledge-underline var(--char-duration, 0.3s) var(--ease) both;
+}
+.knowledge-stage[data-effect='underline'] .phrase {
+  position: relative;
+}
+.knowledge-stage[data-effect='underline'] .keyword.active {
+  background: none;
+  color: #fff;
+}
+.knowledge-stage[data-effect='underline'] .keyword.active .char.read {
+  color: #fff;
+}
+.knowledge-stage[data-effect='invert'] .phrase.focus {
+  background: #deded8;
+  color: #090909;
+  border-radius: 1px;
+}
+.knowledge-stage[data-effect='invert'] .phrase.focus .char.read {
+  color: #090909;
+}
+.knowledge-stage[data-effect='invert'] .char.new {
+  animation: knowledge-invert var(--char-duration, 0.3s) var(--ease) both;
+}
+.knowledge-stage[data-effect='echo'] .char.new {
+  animation: knowledge-echo var(--char-duration, 0.4s) var(--ease) both;
+}
+.knowledge-stage[data-effect='fold'] .char.new {
+  animation: knowledge-fold-char var(--char-duration, 0.4s) var(--ease) both;
+}
+@keyframes knowledge-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px) rotateX(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0);
+  }
+}
+@keyframes knowledge-flip-in {
+  from {
+    opacity: 0;
+    transform: rotateX(-65deg) translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: rotateX(0) translateY(0);
+  }
+}
+@keyframes knowledge-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(35px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes knowledge-fold-in {
+  from {
+    opacity: 0;
+    transform: perspective(800px) rotateY(-32deg) scaleX(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(800px) rotateY(0) scaleX(1);
+  }
+}
+@keyframes knowledge-overlay-in {
+  from {
+    opacity: 0;
+    transform: translate(12px, 8px) rotate(-5deg);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) rotate(-3deg);
+  }
+}
+@keyframes spotlight-pop {
+  0% {
+    opacity: 0.2;
+    transform: translateX(-50%) translateY(8px) scale(0.75);
+  }
+  55% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-2px) scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+@keyframes spotlight-flash {
+  0% {
+    opacity: 0.3;
+    filter: blur(2px);
+    transform: translateX(-50%) scale(1.08);
+  }
+  35%,
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateX(-50%) scale(1);
+  }
+}
+@keyframes knowledge-wave {
+  0% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-7px) rotate(-2deg);
+  }
+  70% {
+    transform: translateY(2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes knowledge-scatter {
+  from {
+    opacity: 0;
+    transform: translate(var(--scatter-x), var(--scatter-y)) rotate(var(--scatter-angle)) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0) scale(1);
+  }
+}
+@keyframes knowledge-waterfall {
+  from {
+    opacity: 0;
+    transform: translateY(-23px) scaleY(1.18);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(3px) scaleY(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+@keyframes knowledge-waterfall-line {
+  from {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes knowledge-char-slide {
+  from {
+    opacity: 0;
+    transform: translateX(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes knowledge-underline {
+  from {
+    transform: scaleX(0);
+    opacity: 0.2;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+@keyframes knowledge-invert {
+  from {
+    opacity: 0.25;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes knowledge-echo {
+  0% {
+    opacity: 0;
+    text-shadow:
+      -12px 0 #aaa8,
+      12px 0 #5558;
+    transform: translateY(4px);
+  }
+  45% {
+    opacity: 1;
+    text-shadow:
+      -4px 0 #aaa5,
+      4px 0 #5555;
+  }
+  100% {
+    opacity: 1;
+    text-shadow: 0 0 transparent;
+    transform: translateY(0);
+  }
+}
+@keyframes knowledge-fold-char {
+  from {
+    opacity: 0;
+    transform: perspective(350px) rotateY(-85deg) scaleX(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(350px) rotateY(0) scaleX(1);
+  }
+}
+
+/* Sentence-level direction. The frame stays centered; finite entry acts on its track. */
+.knowledge-stage[data-presentation='scene'] .current {
+  inset: 50% 0 auto;
+  transform: translateY(-50%);
+  animation: none !important;
+  font-size: var(--scene-font, 42px);
+  line-height: var(--scene-line-height, 1.3);
+  font-weight: var(--scene-weight, 400);
+  letter-spacing: 0.018em;
+  padding: 0 16px;
+  transition: color 0.2s;
+}
+.knowledge-stage[data-presentation='scene'] .current .reading-track {
+  max-width: 900px;
+  margin: auto;
+  text-wrap: balance;
+  transform-origin: center;
+  animation: scene-lift var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene'][data-entrance='zoom'] .current .reading-track {
+  animation-name: scene-zoom;
+}
+.knowledge-stage[data-presentation='scene'][data-entrance='split'] .current .reading-track {
+  animation-name: scene-split;
+}
+.knowledge-stage[data-presentation='scene'][data-entrance='diagonal'] .current .reading-track {
+  animation-name: scene-diagonal;
+}
+.knowledge-stage[data-presentation='scene'][data-entrance='flip'] .current .reading-track {
+  animation-name: scene-flip;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='opening'] .current {
+  color: #f4f4f1;
+  letter-spacing: 0.028em;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='definition'] .keyword.active {
+  transform: scale(1.16);
+}
+.knowledge-stage[data-presentation='scene'][data-layout='contrast'] .reading-track:has(> .text-half) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+}
+.knowledge-stage .text-half {
+  display: inline;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='contrast'] .text-half {
+  display: block;
+  text-align: left;
+  padding: 3px 0;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='contrast'] .text-right {
+  border-left: 1px solid #414141;
+  padding-left: 22px;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='steps'] .current .phrase {
+  transform: translateY(var(--step-offset, 0px));
+  transition: transform var(--beat-duration, 0.55s) var(--ease);
+}
+.knowledge-stage[data-presentation='scene'][data-layout='steps'] .current .phrase.focus {
+  transform: translateY(var(--step-offset, 0px)) scale(1.05);
+}
+.knowledge-stage[data-presentation='scene'][data-layout='spotlight'] .current .phrase.focus {
+  transform: scale(1.12);
+  color: #fff;
+  transition: transform var(--char-duration, 0.3s) var(--ease);
+}
+.knowledge-stage[data-presentation='scene'][data-layout='spotlight'] .current .char.unread {
+  color: #545454;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='diagonal'] .current .phrase {
+  transform: translateY(var(--diagonal-offset, 0px)) rotate(-2deg);
+}
+.knowledge-stage[data-presentation='scene'][data-layout='diagonal'] .current .phrase.focus {
+  transform: translateY(var(--diagonal-offset, 0px)) rotate(1deg) scale(1.06);
+}
+.knowledge-stage .history {
+  inset: auto 0 auto;
+  max-width: 650px;
+  margin: auto;
+  line-height: 20px;
+  letter-spacing: 0.045em;
+  padding: 0 12px;
+  transition:
+    top var(--beat-duration, 0.55s) var(--ease),
+    opacity var(--beat-duration, 0.55s) var(--ease);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.knowledge-stage:not([data-effect='quarter-turn']):not([data-effect='waterfall-flow']) .history {
+  font-size: 13px !important;
+}
+.knowledge-stage .history .reading-track {
+  display: block !important;
+  animation: none !important;
+  transform: none !important;
+  white-space: nowrap;
+  text-wrap: nowrap;
+}
+.knowledge-stage .history .text-half {
+  display: inline !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+.knowledge-stage .history .phrase {
+  transform: none !important;
+  font-size: inherit !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.knowledge-stage .history.just-retired {
+  animation: scene-retire var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage .history.just-retired[data-exit='fold'] {
+  animation-name: scene-retire-fold;
+}
+.knowledge-stage .history.just-retired[data-exit='slide'] {
+  animation-name: scene-retire-slide;
+}
+@keyframes scene-lift {
+  from {
+    opacity: 0.15;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes scene-zoom {
+  from {
+    opacity: 0.1;
+    transform: scale(0.77) translateY(10px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+@keyframes scene-split {
+  from {
+    opacity: 0.1;
+    transform: translateX(-26px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+@keyframes scene-diagonal {
+  from {
+    opacity: 0.1;
+    transform: translate(24px, 18px) rotate(-5deg);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
+}
+@keyframes scene-flip {
+  from {
+    opacity: 0;
+    transform: perspective(700px) rotateX(-58deg) translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: perspective(700px) rotateX(0) translateY(0);
+  }
+}
+@keyframes scene-retire {
+  from {
+    opacity: 0.55;
+    transform: translateY(var(--history-from-y)) rotateX(0) scale(1.65);
+  }
+  to {
+    opacity: var(--history-opacity, 0.3);
+    transform: translateY(0) rotateX(var(--history-angle, 18deg)) scale(1);
+  }
+}
+@keyframes scene-retire-fold {
+  from {
+    opacity: 0.5;
+    transform: translateY(var(--history-from-y)) rotateY(0) scale(1.65);
+  }
+  to {
+    opacity: var(--history-opacity, 0.3);
+    transform: translateY(0) rotateY(-24deg) scale(1);
+  }
+}
+@keyframes scene-retire-slide {
+  from {
+    opacity: 0.5;
+    transform: translate(22px, var(--history-from-y)) scale(1.65);
+  }
+  to {
+    opacity: var(--history-opacity, 0.3);
+    transform: translate(0, 0) scale(1);
+  }
+}
+@media (max-width: 750px) {
+  .knowledge-stage[data-presentation='scene'] .current {
+    font-size: min(var(--scene-font, 42px), 42px);
+  }
+  .knowledge-stage[data-presentation='scene'][data-layout='contrast'] .reading-track:has(> .text-half) {
+    gap: 15px;
+  }
+  .knowledge-stage[data-presentation='scene'][data-layout='contrast'] .text-right {
+    padding-left: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .knowledge-stage[data-presentation='scene'] .current .reading-track {
+    animation: scene-lift 0.12s ease-out both;
+  }
+  .knowledge-stage .history.just-retired {
+    animation-duration: 0.12s;
+  }
+}
+
+/* Brush-like headline uses installed system fonts, with monochrome depth layers. */
+.knowledge-stage .ink-foreground,
+.knowledge-stage .ink-ghost {
+  display: none;
+  pointer-events: none;
+  font-family: 'KaiTi', '楷体', 'STKaiti', '华文行楷', 'FangSong', 'Microsoft YaHei', serif;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='ink'] .current {
+  height: 100%;
+  max-height: 100%;
+  padding: 0 16px;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='ink'] .current .reading-track {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  font-family: 'Segoe UI', 'Microsoft YaHei UI', sans-serif;
+  font-size: inherit;
+  line-height: 1;
+  text-wrap: balance;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='ink'] .current .ink-foreground {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: var(--ink-center-y, 60px);
+  transform: translate(-50%, -50%);
+  font-size: var(--ink-word-font, 120px);
+  color: #f4f4f1;
+  letter-spacing: -0.025em;
+  text-shadow: 0 1px 0 #b5b5b5;
+}
+.knowledge-stage[data-presentation='scene'][data-layout='ink'] .current .ink-ghost {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: var(--ink-center-y, 60px);
+  transform: translate(-50%, -50%) rotate(-7deg);
+  font-size: calc(var(--ink-word-font, 120px) * 1.6);
+  color: #4a4a4a;
+  opacity: 0.24;
+  letter-spacing: -0.03em;
+  filter: blur(0.35px);
+}
+.knowledge-stage .ink-foreground.ink-hit {
+  animation: ink-push var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage .ink-ghost.ink-hit {
+  animation: ink-depth var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage .history .ink-foreground,
+.knowledge-stage .history .ink-ghost {
+  display: none !important;
+}
+@keyframes ink-push {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.45) rotate(-5deg);
+    filter: blur(3px);
+  }
+  45% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0);
+    filter: blur(0);
+  }
+}
+@keyframes ink-depth {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.72) rotate(-12deg);
+  }
+  to {
+    opacity: 0.24;
+    transform: translate(-50%, -50%) scale(1) rotate(-7deg);
+  }
+}
+
+/* Automatic emphasis is stable for each word and follows its semantic role. */
+.knowledge-stage[data-presentation='scene'] .current .keyword.active {
+  background: none;
+  color: #ececea;
+  transform: none;
+  animation: none;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword.active .char.read {
+  color: inherit;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword.active:after {
+  content: none;
+  animation: none;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword.emphasis-settled {
+  color: #aaa;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-role='secondary'].emphasis-current {
+  color: #d4d4d1;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='ring'].active:after {
+  content: '';
+  position: absolute;
+  inset: -6px -8px;
+  border: 1px solid currentColor;
+  border-radius: 48% 44% 53% 49%;
+  transform: rotate(-5deg);
+  opacity: 0.45;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='ring'].emphasis-current {
+  animation: emphasis-ring var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='ring'].emphasis-current:after {
+  opacity: 1;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='underline'].active:after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.13em;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.4;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='underline'].emphasis-current {
+  animation: emphasis-underline var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene']
+  .current
+  .keyword[data-emphasis='underline'].emphasis-current:after {
+  height: 2px;
+  opacity: 0.9;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='invert'].emphasis-current {
+  background: #e7e7e4;
+  color: #101010;
+  animation: emphasis-invert var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='invert'].emphasis-settled {
+  box-shadow: inset 0 -1px #707070;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='weight'].emphasis-current {
+  /* Stroke simulates weight without changing font metrics or the reserved slot. */
+  -webkit-text-stroke: 0.35px currentColor;
+  text-shadow:
+    0.3px 0 currentColor,
+    -0.3px 0 currentColor;
+  animation: emphasis-weight var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='lift'].emphasis-current {
+  animation: emphasis-lift var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='lift'].emphasis-settled {
+  box-shadow: inset 0 -1px #666;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='offset'].emphasis-current {
+  animation: emphasis-offset var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='offset'].emphasis-settled {
+  text-shadow: 0.8px 0.8px #555;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='frame'].active:after {
+  content: '';
+  position: absolute;
+  inset: -4px -5px;
+  border: 1px solid currentColor;
+  opacity: 0.3;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='frame'].emphasis-current {
+  animation: emphasis-frame var(--beat-duration, 0.55s) var(--ease) both;
+}
+.knowledge-stage[data-presentation='scene'] .current .keyword[data-emphasis='frame'].emphasis-current:after {
+  border-width: 2px;
+  opacity: 0.85;
+}
+@keyframes emphasis-ring {
+  0% {
+    transform: scale(0.99);
+  }
+  28% {
+    transform: scale(var(--emphasis-scale, 1.18));
+  }
+  100% {
+    transform: scale(1.03);
+  }
+}
+@keyframes emphasis-underline {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  28% {
+    transform: translateY(-3px) scale(var(--emphasis-scale, 1.18));
+  }
+  100% {
+    transform: translateY(0) scale(1.01);
+  }
+}
+@keyframes emphasis-invert {
+  0% {
+    transform: scale(0.98);
+    filter: brightness(0.85);
+  }
+  28% {
+    transform: scale(var(--emphasis-scale, 1.18));
+    filter: brightness(1.05);
+  }
+  100% {
+    transform: scale(1.02);
+    filter: brightness(1);
+  }
+}
+@keyframes emphasis-weight {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  28% {
+    transform: scale(var(--emphasis-scale, 1.18));
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+@keyframes emphasis-lift {
+  0% {
+    transform: translateY(1px) scale(1);
+  }
+  28% {
+    transform: translateY(-6px) scale(var(--emphasis-scale, 1.18));
+  }
+  100% {
+    transform: translateY(0) scale(1.02);
+  }
+}
+@keyframes emphasis-offset {
+  0% {
+    transform: translateX(0) rotate(0) scale(1);
+  }
+  28% {
+    transform: translateX(calc(var(--emphasis-direction, 1) * 3px))
+      rotate(calc(var(--emphasis-direction, 1) * 2deg)) scale(var(--emphasis-scale, 1.18));
+  }
+  100% {
+    transform: translateX(0) rotate(0) scale(1.02);
+  }
+}
+@keyframes emphasis-frame {
+  0% {
+    transform: scale(0.98);
+  }
+  28% {
+    transform: scale(var(--emphasis-scale, 1.18));
+  }
+  100% {
+    transform: scale(1.01);
+  }
+}

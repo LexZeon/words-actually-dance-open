@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#080808" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob: data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'"
+    />
+    <title>Words Actually Dance · 字真的在跳动</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./visuals/extra-effects.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#experience">跳到播放区域</a>
+    <div id="app">
+      <header class="header">
+        <button class="brand" type="button" aria-label="重新开始当前文案" title="重新开始当前文案">
+          <span class="brand-mark" aria-hidden="true">w<span>↗</span>d</span>
+          <span class="brand-name">字真的在跳动<span class="brand-subtitle">Words Actually Dance</span></span>
+        </button>
+        <div class="header-actions">
+          <button id="source-button" class="source-button" aria-haspopup="dialog" aria-label="选择音乐来源">
+            <span data-icon="audio"></span
+            ><span class="source-copy"><strong>选择音乐</strong><span id="source-label">试听节奏</span></span
+            ><span data-icon="chevron-down"></span>
+          </button>
+          <button
+            id="content-button"
+            class="nav-button"
+            aria-label="知识与文案"
+            title="知识与文案"
+            aria-haspopup="dialog"
+          >
+            <span data-icon="text"></span><span>知识文案</span>
+          </button>
+          <button
+            id="learning-button"
+            class="nav-button learning-button"
+            type="button"
+            aria-haspopup="dialog"
+          >
+            <span class="help-symbol" aria-hidden="true">?</span><span>怎么学</span>
+          </button>
+          <div class="language-switch" role="group" aria-label="界面语言">
+            <button type="button" data-language="zh" aria-pressed="true" lang="zh-CN">中文</button>
+            <button type="button" data-language="en" aria-pressed="false" lang="en">EN</button>
+          </div>
+        </div>
+      </header>
+      <section id="showcase-welcome" class="welcome" aria-labelledby="welcome-heading">
+        <div class="welcome-copy">
+          <h2 id="welcome-heading">把一段知识，读进节奏里。</h2>
+          <p>选一首喜欢的音乐，或先用内置内容试一试。</p>
+        </div>
+        <div class="welcome-steps" aria-label="开始使用">
+          <button id="welcome-music" type="button">
+            <span class="step-number" aria-hidden="true">1</span><span>选择音乐</span>
+          </button>
+          <button id="welcome-content" type="button">
+            <span class="step-number" aria-hidden="true">2</span><span>放入知识</span>
+          </button>
+          <button id="welcome-play" class="welcome-play" type="button">
+            <span data-icon="play"></span><span id="welcome-play-label">开始试听</span>
+          </button>
+        </div>
+        <button
+          id="welcome-dismiss"
+          class="icon-button welcome-dismiss"
+          type="button"
+          aria-label="收起入门指引"
+          title="收起指引"
+        >
+          <span data-icon="close"></span>
+        </button>
+      </section>
+      <main id="experience" tabindex="-1">
+        <h1 class="sr-only">字真的在跳动</h1>
+        <div class="chapter-bar">
+          <div class="topic-meta">
+            <span class="topic-caption">正在读</span><span id="topic-number">01</span
+            ><span class="meta-line"></span><span id="topic-title">音乐里的时间</span>
+          </div>
+          <span id="tempo-label" class="tempo">— <span>BPM</span></span>
+        </div>
+        <section class="dance-zone" aria-label="随音乐跳舞的关键词">
+          <canvas id="dance-canvas" role="img" aria-label="当前关键词"></canvas>
+          <div class="music-signal" aria-hidden="true">
+            <span>·</span><span>·</span><span>·</span><span>·</span><span>·</span>
+          </div>
+        </section>
+        <section class="knowledge-zone" aria-label="跟随节拍的知识文字">
+          <div id="knowledge-stage" class="knowledge-stage" aria-live="off"></div>
+          <p id="knowledge-accessible" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+          <div id="recall-cover" class="recall-cover" hidden role="region" aria-labelledby="recall-heading">
+            <span class="recall-mark" aria-hidden="true">↶</span>
+            <h2 id="recall-heading">先别看，回想一下。</h2>
+            <p id="recall-question">刚才这一句，最重要的意思是什么？</p>
+            <p class="recall-hint">试着用自己的话说出来，再回看核对。</p>
+            <button id="recall-answer" class="recall-answer" type="button">看答案</button
+            ><span class="recall-status">已经暂停，按播放才会继续</span>
+          </div>
+          <div class="reading-meta">
+            <span id="line-counter">01 / 04</span><span id="reading-hint">按下播放，让文字跟着音乐走。</span>
+          </div>
+        </section>
+      </main>
+      <footer class="footer">
+        <div class="session-progress" aria-hidden="true"><span id="session-progress-fill"></span></div>
+        <div class="footer-left">
+          <button
+            id="like-button"
+            class="icon-button labeled-button"
+            aria-label="喜欢这份文案"
+            title="喜欢这份文案"
+            aria-pressed="false"
+          >
+            <span data-icon="heart"></span><span class="control-label">喜欢</span>
+          </button>
+          <button
+            id="download-button"
+            class="icon-button labeled-button"
+            aria-label="下载文案"
+            title="下载文案"
+          >
+            <span data-icon="download"></span><span class="control-label">保存</span>
+          </button>
+        </div>
+        <div class="transport">
+          <button
+            id="previous-button"
+            class="icon-button transport-step"
+            aria-label="上一句，下个拍点切换"
+            title="上一句"
+          >
+            <span data-icon="previous"></span><span class="control-label">上一句</span>
+          </button>
+          <div class="play-control">
+            <button id="play-button" class="play-button" aria-label="播放试听节奏" title="播放 / 暂停 · 空格">
+              <span data-icon="play"></span></button
+            ><span id="play-caption" class="play-caption">播放</span>
+          </div>
+          <button
+            id="next-button"
+            class="icon-button transport-step"
+            aria-label="下一句，下个拍点切换"
+            title="下一句"
+          >
+            <span data-icon="next"></span><span class="control-label">下一句</span>
+          </button>
+        </div>
+        <div class="footer-right">
+          <button id="recall-button" class="recall-button" type="button" aria-pressed="false">
+            <span aria-hidden="true">↶</span><span>回想一下</span>
+          </button>
+          <button
+            id="settings-button"
+            class="icon-button labeled-button"
+            aria-label="表现设置"
+            title="表现设置"
+            aria-haspopup="dialog"
+          >
+            <span data-icon="sliders"></span><span class="control-label">表现</span>
+          </button>
+        </div>
+      </footer>
+      <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+      <dialog id="learning-dialog" class="panel-dialog learning-dialog" aria-labelledby="learning-heading">
+        <div class="panel-header">
+          <h2 id="learning-heading">好看之外，留一点时间给回想。</h2>
+          <button class="icon-button" data-close aria-label="关闭学习说明">
+            <span data-icon="close"></span>
+          </button>
+        </div>
+        <p class="learning-intro">文字跟音乐动起来，学习节奏由你掌握。</p>
+        <div class="learning-methods">
+          <section>
+            <span aria-hidden="true">↶</span>
+            <div>
+              <h3>先回想，再核对</h3>
+              <p>读完一小段，暂停，用自己的话说出一个要点，再回看答案。可以试试主画面的“回想一下”。</p>
+            </div>
+          </section>
+          <section>
+            <span aria-hidden="true">↻</span>
+            <div>
+              <h3>隔一阵，再试一次</h3>
+              <p>换个时间再回忆，忘了就提前复习。目前由你安排时间，软件不会自动提醒。</p>
+            </div>
+          </section>
+          <section>
+            <span aria-hidden="true">¶</span>
+            <div>
+              <h3>一次，读一小段</h3>
+              <p>先抓一个重点。跟不上就暂停，或在“表现”里调慢文字、降低舞动、关闭虚影。</p>
+            </div>
+          </section>
+        </div>
+        <p class="learning-evidence">
+          研究支持这些学习方法，但本软件尚未验证能提高记忆。音乐和动画可能分散注意力，难内容可以放慢、静音或关闭虚影。
+        </p>
+        <button id="show-welcome-button" class="quiet-button" type="button">重新查看入门指引</button>
+      </dialog>
+      <dialog id="source-dialog" class="panel-dialog" aria-labelledby="source-heading">
+        <div class="panel-header">
+          <h2 id="source-heading">音乐</h2>
+          <button class="icon-button" data-close aria-label="关闭"><span data-icon="close"></span></button>
+        </div>
+        <button id="system-audio-button" class="option-row">
+          <span data-icon="monitor"></span
+          ><span><strong>系统声音</strong><small>读取默认输出，切换设备后重新连接</small></span
+          ><span data-icon="arrow"></span>
+        </button>
+        <button id="import-audio-button" class="option-row">
+          <span data-icon="folder"></span
+          ><span><strong>本地音乐</strong><small>选择音频，加入这次的播放列表</small></span
+          ><span data-icon="plus"></span>
+        </button>
+        <div id="playlist" class="playlist"></div>
+        <div class="section-label">试听节奏</div>
+        <div class="demo-options">
+          <button data-demo="bass">低频<span>90</span></button>
+          <button data-demo="balanced" class="selected">律动<span>108</span></button>
+          <button data-demo="bright">明亮<span>126</span></button>
+        </div>
+        <p class="panel-note">试听是本机合成的实验音乐，同样经过节拍分析。</p>
+      </dialog>
+      <dialog id="content-dialog" class="panel-dialog content-dialog" aria-labelledby="content-heading">
+        <div class="panel-header">
+          <h2 id="content-heading">放入想读的知识</h2>
+          <button class="icon-button" data-close aria-label="关闭"><span data-icon="close"></span></button>
+        </div>
+        <details class="custom-content" open>
+          <summary>放入自己的文案<span data-icon="plus"></span></summary>
+          <form id="script-form">
+            <label class="field-label" for="custom-title">标题</label
+            ><input id="custom-title" name="title" autocomplete="off" placeholder="给这段知识一个名字…" />
+            <label class="field-label" for="authoring-mode">整理方式</label>
+            <select id="authoring-mode" name="sourceMode" class="authoring-mode">
+              <option value="source-only">仅原文内容与例子</option>
+              <option value="free-examples">自由举例</option>
+              <option value="free-expansion">自由拓展</option>
+            </select>
+            <div class="script-tools">
+              <button id="copy-authoring-prompt" class="quiet-button" type="button">
+                <span data-icon="copy"></span><span>复制 AI 提示词</span>
+              </button>
+              <button id="import-script-button" class="quiet-button" type="button">
+                <span data-icon="folder"></span><span>导入文案</span>
+              </button>
+            </div>
+            <p id="custom-help" class="authoring-note">
+              把提示词和材料交给你选择的 AI，再粘贴 JSON 结果。也支持现有逐行文字。
+            </p>
+            <label class="field-label" for="custom-text">粘贴文案</label>
+            <p class="input-format-note">每行写“关键词｜讲解”，也可导入 AI 整理的 JSON。</p>
+            <textarea
+              id="custom-text"
+              name="script"
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="custom-help script-error"
+              rows="5"
+              maxlength="100000"
+              placeholder="节拍、参照｜节拍，是音乐中反复出现的时间参照。&#10;节奏、感觉｜不同的节奏，让同一首歌有不同感觉。&#10;&#10;也可以粘贴 AI 返回的完整 JSON 文案。"
+            ></textarea>
+            <p id="script-error" class="field-error" role="alert" hidden></p>
+            <button id="apply-content" class="primary-button" type="submit">跟着音乐读</button>
+          </form>
+        </details>
+        <button id="export-script-button" class="quiet-button save-script-button" type="button">
+          <span data-icon="download"></span><span>保存演出文案</span>
+        </button>
+        <p class="panel-note">保存成 JSON，下次可以直接导入继续播放。</p>
+        <details class="sample-library">
+          <summary>试读内置文案</summary>
+          <div id="topic-list" class="topic-list"></div>
+        </details>
+      </dialog>
+      <dialog id="settings-dialog" class="panel-dialog settings-dialog" aria-labelledby="settings-heading">
+        <div class="panel-header">
+          <h2 id="settings-heading">表现</h2>
+          <button class="icon-button" data-close aria-label="关闭"><span data-icon="close"></span></button>
+        </div>
+        <div class="section-label">知识文字</div>
+        <label class="toggle-row direction-toggle"
+          ><span>自动切换效果</span><input id="auto-direction-toggle" type="checkbox" checked /><span
+            class="toggle-switch"
+          ></span
+        ></label>
+        <p id="auto-direction-note" class="panel-note">默认自动切换效果，关闭后可选择固定字效。</p>
+        <div id="manual-effects" hidden>
+          <div class="section-label">手动表现</div>
+          <div id="effect-options" class="effect-options"></div>
+        </div>
+        <label class="slider-label" for="characters-per-beat"
+          ><span>每拍文字</span><output id="characters-value">2 字</output></label
+        >
+        <input id="characters-per-beat" type="range" min="1" max="4" step="1" value="2" />
+        <label class="slider-label" for="dance-intensity"
+          ><span>关键词舞动</span><output id="intensity-value">明显</output></label
+        >
+        <input id="dance-intensity" type="range" min="0.15" max="2.5" step="0.05" value="1.25" />
+        <p class="panel-note">随声音上提、下落、甩动，或放开跳得更夸张。</p>
+        <label class="slider-label" for="ghost-effect"><span>关键词虚影</span></label>
+        <select id="ghost-effect" class="ghost-effect-select" aria-label="关键词虚影">
+          <option value="auto">随音乐自动选择</option>
+          <option value="scale-echo">缩放回声</option>
+          <option value="twist-shadow">左右扭影</option>
+          <option value="vertical-lift">纵向升降</option>
+          <option value="horizontal-stretch">横向拉伸</option>
+          <option value="glyph-wave">字间波浪</option>
+          <option value="off">关闭虚影</option>
+        </select>
+        <p class="panel-note">白字先起势，淡淡的虚影稍后跟随。可固定一种，也可关闭。</p>
+        <label class="toggle-row"
+          ><span>读完再来一遍</span><input id="repeat-toggle" type="checkbox" checked /><span
+            class="toggle-switch"
+          ></span
+        ></label>
+        <label class="toggle-row"
+          ><span>点缀符号 / emoji</span><input id="emoji-toggle" type="checkbox" checked /><span
+            class="toggle-switch"
+          ></span
+        ></label>
+        <div class="settings-note">
+          <span id="audio-state">尚未播放</span><span id="beat-state">等待拍点</span>
+        </div>
+      </dialog>
+      <input id="audio-input" type="file" accept="audio/*,.flac,.m4a" multiple hidden />
+      <input id="script-input" type="file" accept=".txt,.json,.wad.json" hidden />
+    </div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

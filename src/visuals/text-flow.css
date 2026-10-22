@@ -1,0 +1,67 @@
+/* One persistent typographic world; only its camera moves between sentences. */
+.knowledge-stage[data-effect='waterfall-flow'] {
+  overflow: hidden;
+  perspective: none;
+}
+.knowledge-flow-plane {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .knowledge-line {
+  inset: auto;
+  top: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+  max-width: var(--flow-reading-width, 560px);
+  font-size: 76px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: #f3f3f0;
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  transform-origin: center;
+  animation: none !important;
+  transition: none !important;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .reading-track {
+  width: 100%;
+  max-width: none;
+  line-height: 1.15;
+  font-size: inherit;
+  letter-spacing: inherit;
+  white-space: normal !important;
+  text-wrap: wrap;
+  transform: none !important;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .char.read {
+  color: inherit;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .history .phrase {
+  margin: var(--phrase-reserve-y, 1px) var(--phrase-reserve-x, 0px) !important;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .history .keyword {
+  padding: 0 3px !important;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .history .char,
+.knowledge-stage[data-effect='waterfall-flow'] .history .phrase {
+  animation: none;
+  transition: none;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .keyword.active {
+  color: inherit;
+  background: none;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .keyword {
+  font-weight: 850;
+}
+.knowledge-stage[data-effect='waterfall-flow'] .keyword.active .char.read {
+  color: inherit;
+}

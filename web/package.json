@@ -1,0 +1,20 @@
+{
+  "name": "words-actually-dance-private-web",
+  "version": "0.10.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "author": {
+    "name": "LexZeon Studio"
+  },
+  "scripts": {
+    "build": "node web/scripts/build-site.mjs",
+    "validate": "node web/scripts/validate-site.mjs",
+    "dev": "node web/scripts/preview-site.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "license": "MIT",
+  "wadDistribution": "open-source"
+}

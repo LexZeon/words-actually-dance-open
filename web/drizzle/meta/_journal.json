@@ -1,0 +1,5 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [{ "idx": 0, "version": "6", "when": 1791781200000, "tag": "0001_library", "breakpoints": true }]
+}
